@@ -1,0 +1,109 @@
+---
+name: CI
+
+"on":
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: Test (Rust ${{ matrix.rust }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        rust: ["1.95.0", "stable"]
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Install native dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes \
+            libegl1-mesa-dev \
+            libgles2-mesa-dev \
+            libwayland-dev \
+            libxkbcommon-dev \
+            pkg-config
+
+      - name: Install Rust toolchain
+        run: |
+          rustup toolchain install "${{ matrix.rust }}" --profile minimal
+          rustup default "${{ matrix.rust }}"
+
+      - name: Run tests
+        run: cargo test --workspace --all-targets --locked
+
+  quality:
+    name: Format, lint, docs, and packaging
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Install native dependencies and validators
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes \
+            libegl1-mesa-dev \
+            libgles2-mesa-dev \
+            libwayland-dev \
+            libxkbcommon-dev \
+            mandoc \
+            pkg-config
+
+      - name: Install stable Rust with lint components
+        run: |
+          rustup toolchain install stable \
+            --profile minimal \
+            --component clippy,rustfmt
+          rustup default stable
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Run Clippy
+        run: >-
+          cargo clippy --workspace --all-targets --all-features --locked
+          -- -D warnings
+
+      - name: Build API documentation
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo doc --workspace --no-deps --locked
+
+      - name: Validate manual pages
+        run: |
+          for page in docs/man/*.[157]; do
+            mandoc -T lint "$page"
+          done
+
+      - name: Exercise staged install
+        run: |
+          make \
+            PROFILE=debug \
+            DESTDIR="$RUNNER_TEMP/mural-stage" \
+            PREFIX=/usr \
+            BINDIR=/usr/bin \
+            MANDIR=/usr/share/man \
+            DOCDIR=/usr/share/doc/mural \
+            SYSTEMD_USER_DIR=/usr/lib/systemd/user \
+            install
+
+      - name: Validate generated systemd unit
+        run: |
+          make target/murald.service BINDIR="$PWD/target/debug"
+          systemd-analyze --man=no verify target/murald.service
+          grep -Fx \
+            'ExecStart=/usr/bin/murald' \
+            "$RUNNER_TEMP/mural-stage/usr/lib/systemd/user/murald.service"
+
+      - name: Check whitespace
+        run: git diff --check

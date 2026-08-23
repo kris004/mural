@@ -1,0 +1,67 @@
+---
+name: Bug report
+description: Report a reproducible Mural failure or compatibility problem.
+title: "bug: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve Mural. Redact wallpaper paths, usernames,
+        host details, tokens, and unrelated logs. Use the security policy rather
+        than this form for suspected vulnerabilities.
+
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety check
+      options:
+        - label: This report does not contain a vulnerability or sensitive data.
+          required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Mural version
+      description: Paste `muralctl --version` or the tested Git commit.
+      placeholder: muralctl 0.1.0 or commit SHA
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: >-
+        Include distribution, compositor, GPU, and graphics driver versions.
+      placeholder: |
+        Distribution:
+        Compositor:
+        GPU:
+        Driver:
+        Output layout, if relevant:
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: >-
+        List the smallest reliable sequence and whether `--transition cut`
+        works.
+    validations:
+      required: true
+
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected and actual behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Relevant diagnostics
+      description: Add the smallest redacted health response or journal excerpt.
+      render: text

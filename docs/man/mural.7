@@ -1,0 +1,76 @@
+.TH MURAL 7 "August 22, 2026" "mural 0.1.0" "Miscellaneous Information Manual"
+.SH NAME
+mural \- GPU wallpaper daemon and control tools
+.SH DESCRIPTION
+.B mural
+is a small Wayland wallpaper system made of a long-running renderer daemon,
+.BR murald (1),
+and a script-friendly control client,
+.BR muralctl (1).
+It requires a Wayland compositor with wlr-layer-shell support and is primarily
+tested on Sway.
+.PP
+The daemon creates one background layer-shell surface per output, renders JPG,
+PNG, and WebP wallpapers through EGL/GLES, and keeps native wallpaper library
+state: shuffle bag, history, favorites, quarantine, and per-layout current
+wallpapers. Favorites do not immediately change the current display; they add
+extra copies of favorite paths to rebuilt shuffle bags so future random
+selections choose them more often. Wallpaper navigation commands are intended
+to preserve per-monitor layout semantics, so shifting wallpapers follows the
+actual output layout order.
+.PP
+Configuration lives in
+.BR mural-config (5).
+The packaged user service is a systemd
+.B Type=notify
+unit. It enables systemd watchdog recovery by default; use a local
+user-service drop-in with
+.B WatchdogSec=0
+when diagnosing freezes and wanting the daemon to remain stuck for inspection.
+.SH COMMON COMMANDS
+.TP
+.B muralctl next
+Show the next wallpaper set.
+.TP
+.B muralctl back
+Show the previous wallpaper set.
+.TP
+.B muralctl shift forward
+Move current wallpapers forward through output layout order.
+.TP
+.B muralctl shift back
+Move current wallpapers backward through output layout order.
+.TP
+.B muralctl current
+Show current wallpaper index, output, favorite marker, and path rows.
+.TP
+.B muralctl favorites
+List favorite wallpaper paths.
+.TP
+.B muralctl query --json
+Show daemon output state as JSON.
+.TP
+.B muralctl capabilities
+Show the transition implementations and parameters compiled into the running
+daemon.
+.SH FILES
+.TP
+.I ~/.config/mural/config
+Default configuration file.
+.TP
+.I ~/.local/state/mural
+Default state directory when XDG_STATE_HOME is unset.
+.TP
+.I $XDG_DATA_HOME/systemd/user/murald.service
+User-local service file when XDG_DATA_HOME is set.
+.TP
+.I ~/.local/share/systemd/user/murald.service
+Fallback user-local service file installed by the Makefile.
+.TP
+.I ~/.config/systemd/user/murald.service.d/*.conf
+User service drop-ins.
+.SH SEE ALSO
+.BR murald (1),
+.BR muralctl (1),
+.BR mural-config (5),
+.BR systemd.service (5)

@@ -1,0 +1,24 @@
+[workspace]
+members = [
+  "crates/mural-core",
+  "crates/mural-ipc",
+  "crates/mural-render",
+  "crates/muralctl",
+  "crates/murald",
+]
+resolver = "3"
+
+[workspace.package]
+edition = "2024"
+license = "MIT OR Apache-2.0"
+rust-version = "1.95"
+repository = "https://github.com/kris004/mural"
+homepage = "https://github.com/kris004/mural"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_debug_implementations = "warn"
+
+[workspace.lints.clippy]
+all = "warn"
+pedantic = "warn"

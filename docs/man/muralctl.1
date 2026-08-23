@@ -1,0 +1,328 @@
+.TH MURALCTL 1 "August 22, 2026" "mural 0.1.0" "User Commands"
+.SH NAME
+muralctl \- control the mural wallpaper daemon
+.SH SYNOPSIS
+.B muralctl
+.RB [ --socket
+.IR PATH ]
+.RB [ --timeout-ms
+.IR MS ]
+.I COMMAND
+.RI [ ARGS ...]
+.SH DESCRIPTION
+.B muralctl
+sends one JSON request to
+.BR murald (1)
+and prints the response. Native wallpaper commands operate on murald's
+persistent wallpaper library and current layout state.
+.SH GLOBAL OPTIONS
+.TP
+.BI --socket " PATH"
+Connect to PATH instead of the default mural socket.
+.TP
+.BI --timeout-ms " MS"
+Give up if the daemon does not respond within MS milliseconds. The default is
+30000.
+.TP
+.BR -V , " --version"
+Print the Mural version and exit without contacting the daemon.
+.SH COMMANDS
+.TP
+.B ping
+Check daemon health.
+.TP
+.B capabilities [--json]
+Print the running daemon's protocol version and compiled-in transition
+capabilities. The default is human-readable text;
+.B --json
+prints the versioned capability payload for scripts.
+.TP
+.B health [--json]
+Print supervisor and renderer health as JSON, including renderer pid,
+generation, restart count, last renderer error, diagnostic path, and per-output
+renderability state.
+.TP
+.B query [--json]
+Print daemon output state as JSON.
+.TP
+.BI set " --output NAME PATH " [ OPTIONS ]
+Set explicit image paths for one or more outputs. May also use
+.BI --output NAME=PATH .
+.TP
+.BI preload " --output NAME PATH"
+Validate explicit image paths. Use
+.B cache warm
+to warm canvas thumbnails.
+.TP
+.BI clear " [--output NAME ...] [--color #RRGGBB]"
+Clear selected outputs, or all known outputs, to a solid color.
+.TP
+.B next
+Show the next wallpaper set from murald's shuffle/history state.
+.TP
+.B back
+Show the previous wallpaper set.
+.TP
+.BI shift " [forward|back]"
+Rotate the current wallpaper set across outputs in layout order.
+.TP
+.B shift-forward
+Alias for shifting forward.
+.TP
+.B shift-back
+Alias for shifting backward.
+.TP
+.BI replace " INDEX"
+Replace the current wallpaper at output index INDEX.
+.TP
+.BI quarantine " INDEX"
+Move the current wallpaper at INDEX to the quarantine directory and replace it.
+The misspelling
+.B quarentine
+is accepted for compatibility.
+.TP
+.BI favorite " INDEX"
+Add the current wallpaper at INDEX to the favorites list. Favorites remain in
+the normal library but are inserted into the shuffle bag multiple times
+according to
+.BR favorite_weight ,
+so future random selections pick them more often. The current displayed
+wallpaper does not change.
+.TP
+.BI unfavorite " INDEX"
+Remove the current wallpaper at INDEX from the favorites list, returning it to
+normal shuffle-bag weight. The current displayed wallpaper does not change.
+.TP
+.B favorites
+List favorite wallpaper paths.
+.TP
+.B current
+Show current wallpaper rows as index, output, favorite marker, and path.
+.TP
+.B rescan
+Rescan the top-level wallpaper directory.
+.TP
+.BI cache " status [--json]"
+Show canvas thumbnail cache status.
+.TP
+.BI cache " warm [--scope current|all] [--workers N] [--backend auto|vips|internal] [--json]"
+Schedule nonblocking canvas thumbnail cache warming. The
+.B auto
+backend prefers
+.BR vipsthumbnail
+when available and falls back to the internal decoder.
+.TP
+.BI cache " clear [--json]"
+Remove cached canvas thumbnails from disk and clear the daemon's in-memory
+canvas thumbnail cache state.
+.TP
+.BI world " cache status [--json]"
+Inspect the virtual world cache. This command runs offline and does
+not require a running daemon. Status output includes the
+.B path-snapshot-v1
+order policy plus the last real compute failure count and failure log path.
+.TP
+.BI world " cache index [--json]"
+Write or refresh the world cache manifest for the current top-level wallpaper
+library. This indexes paths only; it does not generate image tiles yet.
+.TP
+.BI world " cache failures [--json]"
+Print the current world-cache last-compute failure records directly. Plain
+output is tab-separated
+.IR kind ,
+.IR item ,
+and
+.IR message .
+JSON output includes the failure log path, count, and records.
+.TP
+.BI world " cache compute --scope all [--dry-run] [--background] [--limit N] [--tile-limit N] [--workers N] [--progress] [--json]"
+Generate real per-wall cell thumbnails and the all-library world tile LOD
+pyramid, or report planned work without writing image cache data when
+.B --dry-run
+is supplied. Plans and generated tile work report ready/missing counts with
+LOD labels. Dry-run plans include an estimated remaining byte count. Real
+compute runs rewrite the last-compute failure log and progress output ends
+with elapsed time and work rate.
+.B --background
+starts a detached local compute process and prints the child PID plus a
+cache-local log path.
+.TP
+.BI world " cache compute --scope route --from PATH --to PATH [--dry-run] [--background] [--tile-limit N] [--workers N] [--progress] [--json]"
+.TQ
+.BI world " cache compute --scope route --route FROM TO [--route FROM TO ...] [--dry-run] [--background] [--tile-limit N] [--workers N] [--progress] [--json]"
+Generate only the selected bounded route LOD needed for the route rectangle
+between one or more library path pairs. Selected LOD tiles are deduplicated
+across route pairs and generated directly from real source imagery or existing
+cell thumbnails without forcing persistent per-wall thumbnail generation for
+the route scope. Plans and generated tile work report ready/missing counts with
+LOD labels. Dry-run plans include an estimated remaining byte count. Real
+compute runs rewrite the last-compute failure log and progress output ends with
+elapsed time and work rate.
+Undecodable source cells are left transparent in the generated route tile and
+recorded in the last-compute failure log rather than blocking the whole tile.
+.B --workers
+parallelizes LOD tile child-block generation.
+.B --background
+starts a detached local compute process and prints the child PID plus a
+cache-local log path.
+.TP
+.BI world " cache compute --scope neighborhood --center PATH [--center PATH ...] [--radius N] [--lod N] [--dry-run] [--background] [--tile-limit N] [--workers N] [--progress] [--json]"
+Generate selected world tiles around one or more library paths. The default
+radius of 0 warms only the tile containing each center path; larger radii add
+neighboring tiles at the selected LOD. This is intended for current/target
+neighborhood prefetch without warming the whole library. Plans and generated
+tile work report ready/missing counts with LOD labels. Dry-run plans include an
+estimated remaining byte count. Real compute runs rewrite the last-compute
+failure log and progress output ends with elapsed time and work rate.
+.B --background
+starts a detached local compute process and prints the child PID plus a
+cache-local log path.
+.TP
+.B stop
+Ask murald to exit cleanly.
+.SH WALLPAPER OPTIONS
+The
+.B set
+command accepts
+.BR cut ,
+.BR fade ,
+.BR world ,
+and
+.BR push: DIR
+transitions. Wallpaper navigation commands
+.BR next ,
+.BR back ,
+.BR shift ,
+.BR replace ,
+and
+.B quarantine
+accept these overrides:
+.TP
+.BI --transition " NAME"
+One of
+.BR cut ,
+.BR fade ,
+.BR push:up ,
+.BR push:down ,
+.BR push:left ,
+.BR push:right ,
+.BR canvas ,
+.BR canvas:auto ,
+.BR canvas:horizontal ,
+.BR canvas:vertical ,
+or the experimental
+.BR world
+transition.
+.B canvas
+is valid only for wallpaper navigation commands because it requires mural
+history and shuffle state.
+.B world
+is valid for wallpaper navigation commands and explicit
+.B set
+requests when the current and target wallpapers are present in the ordered
+library and the required real world cache tiles are ready.
+.TP
+.BI --duration-ms " MS"
+Transition duration in milliseconds.
+.TP
+.BI --easing " NAME"
+One of
+.BR linear ,
+.BR ease-out-cubic ,
+or
+.BR ease-in-out-cubic .
+.TP
+.BI --mode " NAME"
+For push, one of
+.BR portal ,
+.BR screen ,
+or
+.BR pan .
+For canvas, one of
+.BR clipped ,
+.BR morph ,
+.BR overlap ,
+.BR collage ,
+or
+.BR span .
+Canvas
+.B collage
+and
+.B span
+require
+.BR "--canvas-walk strip" .
+.TP
+.BI --canvas-zoom-out-ms " MS"
+Select
+.B canvas
+and set the zoom-out phase.
+.TP
+.BI --canvas-pan-ms " MS"
+Select
+.B canvas
+and set the overview pan phase.
+.TP
+.BI --canvas-zoom-in-ms " MS"
+Select
+.B canvas
+and set the zoom-in phase.
+.TP
+.BI --canvas-pan-axis " auto|horizontal|vertical"
+Select
+.B canvas
+and set the natural-order pan axis.
+.TP
+.BI --canvas-walk " paged|strip"
+Select
+.B canvas
+and set the canvas walk order.
+.B paged
+walks the bounded canvas from top-left through rows/columns;
+.B strip
+uses the older centered infinite-right strip.
+.TP
+.BI --canvas-overview-scale " SCALE"
+Select
+.B canvas
+and set the overview tile scale as a fraction of the output. Lower values zoom
+farther out.
+.TP
+.BI --canvas-tile-count " auto|N"
+Select
+.B canvas
+and set automatic tile count or an exact tile count.
+.TP
+.BI --canvas-max-tile-count " N"
+Select
+.B canvas
+and cap automatic tile count. Maximum: 256.
+.TP
+.BI --scale-mode " NAME"
+One of
+.BR fill ,
+.BR fit ,
+.BR center ,
+or
+.BR stretch .
+.TP
+.B --json
+Print the wallpaper response as JSON instead of text.
+.SH OUTPUT
+Most daemon-control commands print JSON. Wallpaper commands print
+script-friendly text by default unless
+.B --json
+is supplied.
+.SH EXIT STATUS
+.TP
+.B 0
+Request succeeded.
+.TP
+.B 1
+CLI, connection, or transport error.
+.TP
+.B 2
+The daemon returned an error response, or an offline status command found an
+expected not-ready state.
+.SH SEE ALSO
+.BR murald (1),
+.BR mural-config (5)

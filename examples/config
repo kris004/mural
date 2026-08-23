@@ -1,0 +1,46 @@
+# Mural's wallpaper library is intentionally scanned only at this directory's
+# top level. Paths beginning with ~ are expanded against HOME.
+wall_dir = ~/Pictures/wallpapers
+# quarantine_dir = ~/Pictures/wallpapers/.quarantine
+# state_dir = ~/.local/state/mural
+
+favorite_weight = 4
+max_history = 1000
+scale_mode = fill
+
+# Built-in fade profile.
+transition.fade.duration_ms = 500
+transition.fade.easing = ease-in-out-cubic
+
+# Built-in push profile.
+transition.push.duration_ms = 900
+transition.push.easing = ease-out-cubic
+transition.push.mode = portal
+
+# Built-in bounded canvas profile.
+transition.canvas.zoom_out_ms = 180
+transition.canvas.pan_ms = 80
+transition.canvas.zoom_in_ms = 260
+transition.canvas.easing = ease-out-cubic
+transition.canvas.mode = clipped
+transition.canvas.walk = paged
+transition.canvas.pan_axis = auto
+transition.canvas.overview_scale = 0.333333
+transition.canvas.tile_count = auto
+# transition.canvas.max_tile_count = 48
+
+# Persistent canvas-thumbnail cache and full-image decode workers.
+canvas.thumbnail_max_edge = 1536
+canvas.cache.backend = auto
+canvas.cache.workers = 1
+canvas.cache.memory_mib = 512
+decode.full_workers = 2
+
+# High-level wallpaper action bindings.
+action.next = push:up
+action.back = push:down
+action.shift_forward = push:left
+action.shift_back = push:right
+action.replace = cut
+action.quarantine = cut
+action.startup = cut

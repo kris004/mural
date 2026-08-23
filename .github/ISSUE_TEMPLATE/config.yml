@@ -1,0 +1,9 @@
+---
+blank_issues_enabled: false
+contact_links:
+  - name: Support guide
+    url: https://github.com/kris004/mural/blob/main/SUPPORT.md
+    about: Read the diagnostics and privacy guidance before reporting a problem.
+  - name: Security policy
+    url: https://github.com/kris004/mural/security/policy
+    about: Do not disclose suspected vulnerabilities in a public issue.

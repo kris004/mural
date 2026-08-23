@@ -1,0 +1,38 @@
+---
+name: Feature request
+description: Propose a focused user-facing or contributor-facing improvement.
+title: "feature: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the use case before the implementation. For new transitions or
+        extension-system changes, review `docs/transition-authoring.md` first.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What workflow is difficult or impossible today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Describe the user-visible result, not only an implementation.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibility and extension impact
+      description: >-
+        Note effects on CLI, config, IPC, rendering, or existing transitions.

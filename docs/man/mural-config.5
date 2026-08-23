@@ -1,0 +1,561 @@
+.TH MURAL-CONFIG 5 "August 22, 2026" "mural 0.1.0" "File Formats"
+.SH NAME
+mural-config \- mural wallpaper daemon configuration
+.SH SYNOPSIS
+.I $MURAL_CONFIG
+.br
+.I $XDG_CONFIG_HOME/mural/config
+.br
+.I ~/.config/mural/config
+.SH DESCRIPTION
+.BR murald (1)
+reads a simple line-oriented
+.B key = value
+configuration file. Blank lines are ignored. Inline comments start with
+.B #
+or
+.B ;
+unless inside single or double quotes. Values may be quoted.
+.PP
+If
+.B MURAL_CONFIG
+is set, that exact file is used and must exist. Otherwise murald reads
+.B $XDG_CONFIG_HOME/mural/config
+or
+.B ~/.config/mural/config
+when present. Some settings also have environment overrides; those are listed
+with the key.
+.SH QUICK STRUCTURE
+The config has four main groups:
+.IP \(bu 2
+Path, library, and render keys such as
+.BR wall_dir ,
+.BR favorite_weight ,
+and
+.BR scale_mode .
+.IP \(bu 2
+Transition profile keys:
+.BR transition.NAME.FIELD .
+These tune animation behavior.
+.IP \(bu 2
+Action keys:
+.BR action.next ,
+.BR action.back ,
+and similar. These choose which transition profile each
+.BR muralctl (1)
+action uses.
+.IP \(bu 2
+Canvas cache keys:
+.BR canvas.* .
+These tune thumbnail generation shared by canvas transitions.
+.PP
+The similar-looking prefixes
+.B transition.canvas.*
+and
+.B canvas.*
+mean different things:
+.IP \(bu 2
+.B transition.canvas.*
+configures the built-in
+.B canvas
+transition animation.
+.IP \(bu 2
+.B canvas.*
+configures the thumbnail cache used by any canvas transition profile.
+.SH COMMON EXAMPLE
+.EX
+wall_dir = ~/Pictures/wallpapers
+state_dir = ~/.local/state/mural
+quarantine_dir = ~/Pictures/wallpapers/.quarantine
+
+favorite_weight = 4
+max_history = 1000
+scale_mode = fill
+
+# Built-in transition profiles.
+transition.push.duration_ms = 2000
+transition.push.easing = linear
+transition.push.mode = portal
+
+transition.canvas.zoom_out_ms = 180
+transition.canvas.pan_ms = 80
+transition.canvas.zoom_in_ms = 260
+transition.canvas.mode = clipped
+transition.canvas.pan_axis = auto
+transition.canvas.overview_scale = 0.33
+transition.canvas.tile_count = auto
+# Optional cap for auto mode:
+# transition.canvas.max_tile_count = 48
+
+# Canvas thumbnail cache.
+canvas.thumbnail_max_edge = 1536
+canvas.cache.backend = auto
+canvas.cache.workers = 1
+canvas.cache.memory_mib = 512
+
+# Full-size target-image decode workers.
+decode.full_workers = 2
+
+# High-level action bindings.
+action.next = push:up
+action.back = push:down
+action.shift_forward = push:left
+action.shift_back = push:right
+action.replace = cut
+action.quarantine = cut
+action.startup = cut
+.EE
+.SH PATH KEYS
+.TP
+.BI wall_dir " = PATH"
+Top-level wallpaper library directory. Environment override:
+.BR MURAL_WALL_DIR ,
+then legacy
+.BR WALL_DIR .
+Default:
+.IR ~/Pictures/wallpapers .
+.TP
+.BI state_dir " = PATH"
+Persistent mural state directory. Environment override:
+.BR MURAL_STATE_DIR .
+Default:
+.I $XDG_STATE_HOME/mural
+or
+.IR ~/.local/state/mural .
+.TP
+.BI quarantine_dir " = PATH"
+Directory used by
+.BR "muralctl quarantine" .
+Environment override:
+.BR MURAL_QUARANTINE_DIR ,
+then legacy
+.BR QUARANTINE_DIR .
+Default:
+.I wall_dir/.quarantine
+.
+.SH LIBRARY KEYS
+.TP
+.BI favorite_weight " = INTEGER"
+Shuffle-bag favorite weighting. A favorite is still part of the normal library,
+but it appears this many total times in a rebuilt shuffle bag, making future
+random selections choose it more often. Environment override:
+.BR MURAL_FAVORITE_WEIGHT ,
+then legacy
+.BR FAVORITE_WEIGHT .
+Default: 4.
+.TP
+.BI max_history " = INTEGER"
+Maximum per-layout history length. Environment override:
+.BR MURAL_MAX_HISTORY ,
+then legacy
+.BR MAX_HISTORY .
+Default: 1000.
+.SH RENDER KEYS
+.TP
+.BI scale_mode " = MODE"
+Default scaling mode: one of
+.BR fill ,
+.BR fit ,
+.BR center ,
+or
+.BR stretch .
+Environment override:
+.BR MURAL_SCALE_MODE .
+Default:
+.BR fill .
+.TP
+.BI decode.full_workers " = N"
+Worker count for full target-image decodes. Defaults to 2 and is clamped to
+available CPU parallelism, up to 32. Environment override:
+.BR MURAL_DECODE_FULL_WORKERS .
+.SH TRANSITION OVERVIEW
+Mural separates transition behavior into profiles and actions.
+.PP
+A transition profile describes how an animation works. Built-in profile names
+are
+.BR cut ,
+.BR fade ,
+.BR world ,
+.BR push ,
+and
+.BR canvas .
+Custom profiles use the same namespace:
+.BR transition.NAME.FIELD .
+.PP
+An action binding chooses the transition value used by a high-level command
+when the command does not pass an explicit
+.BR --transition .
+For example:
+.EX
+transition.push.duration_ms = 900
+transition.push.mode = portal
+action.next = push:up
+action.back = push:down
+.EE
+.PP
+Here
+.B push
+is the built-in profile, and
+.B :up
+or
+.B :down
+only overrides the push direction for that action.
+.SH BUILT-IN TRANSITION PROFILES
+.SS Built-in fade profile
+.TP
+.BI transition.fade.duration_ms " = MS"
+Fade transition duration in milliseconds. Default: 900.
+.TP
+.BI transition.fade.easing " = NAME"
+Fade easing: one of
+.BR linear ,
+.BR ease-out-cubic ,
+or
+.BR ease-in-out-cubic .
+Default:
+.BR ease-out-cubic .
+.SS Built-in push profile
+.TP
+.BI transition.push.duration_ms " = MS"
+Push transition duration in milliseconds. Default: 900.
+.TP
+.BI transition.push.easing " = NAME"
+Push easing: one of
+.BR linear ,
+.BR ease-out-cubic ,
+or
+.BR ease-in-out-cubic .
+Default:
+.BR ease-out-cubic .
+.TP
+.BI transition.push.mode " = NAME"
+Push renderer mode: one of
+.BR portal ,
+.BR screen ,
+or
+.BR pan .
+Default:
+.BR portal .
+.SS Built-in canvas transition profile
+.TP
+.BI transition.canvas.zoom_out_ms " = MS"
+Canvas zoom-out phase in milliseconds. Default: 180.
+.TP
+.BI transition.canvas.pan_ms " = MS"
+Canvas overview pan phase in milliseconds. Default: 80.
+.TP
+.BI transition.canvas.zoom_in_ms " = MS"
+Canvas zoom-in phase in milliseconds. Default: 260.
+.TP
+.BI transition.canvas.mode " = NAME"
+Canvas preview mode:
+.BR clipped
+uses the original screen-sized clipped tiles,
+.BR morph
+reveals actual wallpaper aspect ratios during zoom-out and clips again during
+zoom-in,
+.BR overlap
+uses overlapping full-image thumbnails, and
+.BR collage
+uses the focus-centered full-thumbnail collage layout.
+.BR span
+treats outputs as viewports into one shared morph-style desktop canvas. Default:
+.BR clipped .
+.B collage
+and
+.B span
+require
+.BR "transition.canvas.walk = strip" .
+Environment override:
+.BR MURAL_CANVAS_MODE .
+.TP
+.BI transition.canvas.walk " = NAME"
+Canvas walk order:
+.BR paged
+walks a bounded row/column canvas from top-left to bottom-right, then starts a
+new page; and
+.BR strip
+uses the older centered infinite-right strip. Default:
+.BR paged .
+Environment override:
+.BR MURAL_CANVAS_WALK .
+.TP
+.BI transition.canvas.pan_axis " = AXIS"
+Canvas natural-order pan axis:
+.BR auto ,
+.BR horizontal ,
+or
+.BR vertical .
+.B auto
+uses horizontal order on landscape outputs and vertical order on portrait
+outputs. Default:
+.BR auto .
+.TP
+.BI transition.canvas.easing " = NAME"
+Canvas easing: one of
+.BR linear ,
+.BR ease-out-cubic ,
+or
+.BR ease-in-out-cubic .
+Default:
+.BR ease-out-cubic .
+.TP
+.BI transition.canvas.overview_scale " = SCALE"
+Canvas overview tile scale as a fraction of the output. Lower values zoom
+farther out and require more preview tiles. Default:
+.BR 0.333333 .
+.TP
+.BI transition.canvas.tile_count " = auto|N"
+Automatic tile count or exact manual tile count. In auto mode, mural derives
+the count from
+.BR overview_scale ,
+output size, and
+.B pan_axis
+so the current and next tiles can remain centered without exposing canvas
+edges. Manual counts may show blank space if too low. Maximum:
+.BR 256 .
+Default:
+.BR auto .
+.TP
+.BI transition.canvas.max_tile_count " = N"
+Optional cap for
+.B tile_count = auto .
+Unset means no user cap, but the internal safety maximum still applies.
+Maximum:
+.BR 256 .
+.SH NAMED TRANSITION PROFILES
+Use a named profile when several actions should share the same settings, or
+when a profile should not modify the built-in defaults.
+.PP
+Mural validates every defined profile at startup, including profiles not bound
+to an action. Fields from another transition type and invalid mode/walk
+combinations are errors. Built-in profile names cannot be retyped.
+.PP
+Every custom profile starts with:
+.TP
+.BI transition.NAME.type " = TYPE"
+Profile type: one of
+.BR cut ,
+.BR fade ,
+.BR world ,
+.BR push ,
+or
+.BR canvas .
+.PP
+Then add fields that apply to that type:
+.TP
+.BI transition.NAME.duration_ms " = MS"
+Duration for
+.BR fade ,
+.BR world ,
+and
+.B push
+profiles.
+.TP
+.BI transition.NAME.easing " = NAME"
+Easing for animated profiles: one of
+.BR linear ,
+.BR ease-out-cubic ,
+or
+.BR ease-in-out-cubic .
+.TP
+.BI transition.NAME.direction " = DIR"
+Default push direction for push profiles when the action reference does not
+supply one:
+.BR up ,
+.BR down ,
+.BR left ,
+or
+.BR right .
+.TP
+.BI transition.NAME.mode " = NAME"
+Push renderer mode for push profiles:
+.BR portal ,
+.BR screen ,
+or
+.BR pan .
+Canvas preview mode for canvas profiles:
+.BR clipped ,
+.BR morph ,
+.BR overlap ,
+.BR collage ,
+or
+.BR span .
+.TP
+.BI transition.NAME.walk " = NAME"
+Canvas walk order for canvas profiles:
+.BR paged
+or
+.BR strip .
+.TP
+.BI transition.NAME.zoom_out_ms " = MS"
+Canvas zoom-out phase in milliseconds for canvas profiles.
+.TP
+.BI transition.NAME.pan_ms " = MS"
+Canvas overview pan phase in milliseconds for canvas profiles.
+.TP
+.BI transition.NAME.zoom_in_ms " = MS"
+Canvas zoom-in phase in milliseconds for canvas profiles.
+.TP
+.BI transition.NAME.pan_axis " = AXIS"
+Canvas natural-order pan axis for canvas profiles:
+.BR auto ,
+.BR horizontal ,
+or
+.BR vertical .
+.TP
+.BI transition.NAME.overview_scale " = SCALE"
+Canvas overview tile scale for canvas profiles.
+.TP
+.BI transition.NAME.tile_count " = auto|N"
+Automatic or exact manual tile count for canvas profiles. Maximum:
+.BR 256 .
+.TP
+.BI transition.NAME.max_tile_count " = N"
+Optional cap for automatic canvas tile counts. Maximum:
+.BR 256 .
+.TP
+.BI transition.world.fallback " = cut|push:DIR"
+Immediate fallback used when an existing
+.B world
+cache cannot cover a requested route. The fallback is only used for
+route-gated world requests; a true no-cache startup failure still reports the
+world cache command to run. DIR is
+.BR up ,
+.BR down ,
+.BR left ,
+or
+.BR right .
+.PP
+Example:
+.EX
+transition.fast.type = push
+transition.fast.duration_ms = 350
+transition.fast.easing = ease-in-out-cubic
+transition.fast.mode = pan
+
+action.next = fast:up
+action.back = fast:down
+.EE
+.SH ACTION TRANSITION KEYS
+These keys choose the transition used by high-level
+.BR muralctl (1)
+wallpaper actions.
+.TP
+.BI action.next " = TRANSITION"
+Default transition for
+.BR "muralctl next" .
+.TP
+.BI action.back " = TRANSITION"
+Default transition for
+.BR "muralctl back" .
+.TP
+.BI action.shift_forward " = TRANSITION"
+Default transition for forward shifts.
+.TP
+.BI action.shift_back " = TRANSITION"
+Default transition for backward shifts.
+.TP
+.BI action.replace " = TRANSITION"
+Default transition for replacements.
+.TP
+.BI action.quarantine " = TRANSITION"
+Default transition for quarantine replacements.
+.TP
+.BI action.startup " = TRANSITION"
+Startup display transition.
+.SH TRANSITION VALUES
+An action transition value is one of:
+.TP
+.B cut
+Immediate cut.
+.TP
+.B fade
+Blend the complete old and new wallpaper scenes using the built-in fade
+profile.
+.TP
+.B canvas
+The built-in canvas transition profile.
+.TP
+.BI canvas : AXIS
+The built-in canvas profile with its pan axis overridden. AXIS is
+.BR auto ,
+.BR horizontal ,
+or
+.BR vertical .
+.TP
+.BI push: DIR
+The built-in push profile with DIR set to
+.BR up ,
+.BR down ,
+.BR left ,
+or
+.BR right .
+.TP
+.B NAME
+A named transition profile.
+.TP
+.BI NAME : OVERRIDE
+A named push profile with its direction overridden, or a named canvas profile
+with its pan axis overridden.
+.PP
+The
+.B canvas
+transition is supported for high-level wallpaper actions. Low-level
+.BR "muralctl set"
+rejects canvas because it bypasses the history and shuffle state needed to
+build a stable preview tape.
+.B world
+can be used by explicit
+.BR "muralctl set"
+requests because the supervisor derives route metadata from current renderer
+health and the requested target paths.
+.PP
+Canvas starts with the current wallpaper centered, zooms out, pans along the
+configured natural-order axis through layout history plus forward shuffle-bag
+entries, then zooms in on the target wallpaper. Its preview can use the
+original clipped tiles, morphing aspect-ratio tiles, overlapping full-image
+thumbnails, a focus-centered collage, or a shared desktop-spanning morph
+canvas. The focus-centered collage and desktop span modes
+require
+.BR "walk = strip" .
+.SH CANVAS CACHE KEYS
+These keys configure thumbnail generation and cache behavior shared by all
+canvas transition profiles. They do not select or tune animation timings.
+.TP
+.BI canvas.thumbnail_max_edge " = PX"
+Maximum cached thumbnail edge for canvas preview tiles. Defaults to 1536.
+Higher values reduce overview blur but increase cache generation/upload cost.
+Environment override:
+.BR MURAL_CANVAS_THUMBNAIL_MAX_EDGE .
+.TP
+.BI canvas.cache.backend " = NAME"
+Canvas thumbnail cache backend:
+.BR auto ,
+.BR vips ,
+or
+.BR internal .
+.B auto
+prefers
+.BR vipsthumbnail
+when available and falls back to the internal Rust decoder. Environment
+override:
+.BR MURAL_CANVAS_CACHE_BACKEND .
+.TP
+.BI canvas.cache.workers " = N"
+Conservative background canvas cache worker count. Defaults to 1 and is
+clamped to available CPU parallelism, up to 32. Explicit
+.BR "muralctl cache warm --workers"
+requests can schedule more worker threads for that request. Environment
+override:
+.BR MURAL_CANVAS_CACHE_WORKERS .
+.TP
+.BI canvas.cache.memory_mib " = N"
+Decoded canvas thumbnail RAM cache size in MiB. Defaults to 512. This cache
+stores decoded RGBA thumbnail pixels and reduces request-time disk decode
+latency for large canvas overviews. Environment override:
+.BR MURAL_CANVAS_CACHE_MEMORY_MIB .
+.SH SEE ALSO
+.BR murald (1),
+.BR muralctl (1),
+.BR systemd.service (5)

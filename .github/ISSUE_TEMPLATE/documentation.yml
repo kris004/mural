@@ -1,0 +1,37 @@
+---
+name: Documentation report
+description: Report unclear, incomplete, or incorrect Mural documentation.
+title: "docs: "
+body:
+  - type: input
+    id: location
+    attributes:
+      label: Documentation location
+      description: Link the page or name the file, manual, or help command.
+      placeholder: README.md, muralctl(1), or muralctl set --help
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Explain what is incorrect, missing, or difficult to follow.
+    validations:
+      required: true
+
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested improvement
+      description: Describe the wording, example, or structure that would help.
+
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy check
+      options:
+        - label: >-
+            This report contains no credentials, private paths, or personal
+            data.
+          required: true

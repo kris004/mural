@@ -1,0 +1,116 @@
+.TH MURALD 1 "August 22, 2026" "mural 0.1.0" "User Commands"
+.SH NAME
+murald \- Wayland layer-shell wallpaper daemon
+.SH SYNOPSIS
+.B murald
+.RB [ --socket
+.IR PATH ]
+.RB [ --trace ]
+.RB [ --standalone ]
+.SH DESCRIPTION
+.B murald
+starts a supervisor process that owns the public IPC socket, wallpaper state,
+systemd readiness, and renderer health. The supervisor starts the same
+executable as a renderer child, which creates one wlroots layer-shell
+background surface per output and renders JPG, PNG, and WebP wallpapers through
+EGL/GLES.
+It is controlled over a Unix socket by
+.BR muralctl (1)
+and keeps native wallpaper library, history, favorites, quarantine, and
+per-layout current-wall state.
+.PP
+On startup, murald displays the saved current wallpaper set. If no mural state
+exists, it chooses and persists the first random set.
+.PP
+When the compositor exposes
+.BR zwlr_output_power_manager_v1 ,
+murald tracks per-output power state. If an output is definitely powered off,
+murald defers EGL surface work, texture uploads, and swaps, then renders
+pending wallpaper state after power returns. Unknown output-power state waits
+for a definitive mode event; unsupported output-power management falls back to
+normal rendering.
+.SH OPTIONS
+.TP
+.BI --socket " PATH"
+Listen on PATH instead of the default socket.
+.TP
+.B --standalone
+Run the legacy single-process daemon for debugging.
+.TP
+.BR --trace , " --debug"
+Enable verbose diagnostic logging to stderr/journal.
+Per-frame render logging is suppressed unless
+.B MURAL_TRACE_FRAMES
+is also set.
+.TP
+.BR -V , " --version"
+Print the Mural version and exit.
+.TP
+.BR -h , " --help"
+Show command help and exit.
+.SH CONFIGURATION
+murald reads configuration from
+.BR mural-config (5).
+Some settings also have environment overrides; see
+.BR mural-config (5)
+for the supported keys.
+.SH SYSTEMD
+The packaged user service uses
+.B Type=notify
+and murald sends
+.B READY=1
+after the IPC socket is listening and startup wallpaper display has completed.
+It sends
+.B STOPPING=1
+on normal shutdown.
+.PP
+The supervisor is the systemd main process. If the renderer child exits or
+stops responding to the private control channel, the supervisor records a
+diagnostic under the mural state directory when possible, starts a new renderer
+generation, and restores the saved current wallpaper set.
+.PP
+The packaged unit enables systemd watchdog supervision with
+.BR WatchdogSec=30s .
+Systemd passes
+.B WATCHDOG_USEC
+to murald, and murald sends
+.B WATCHDOG=1
+at half that interval. Use a user-service drop-in with
+.B WatchdogSec=0
+to disable watchdog recovery locally while diagnosing freezes.
+.PP
+The supplied unit joins
+.BR graphical-session.target
+and requires
+.B WAYLAND_DISPLAY
+in the systemd user manager environment. A compositor or session manager that
+does not provide that integration should start the unit from its own session
+startup or run murald directly.
+.SH FILES
+.TP
+.I $XDG_CONFIG_HOME/mural/config
+Preferred config file when XDG_CONFIG_HOME is set.
+.TP
+.I ~/.config/mural/config
+Fallback config file.
+.TP
+.I $XDG_STATE_HOME/mural
+Preferred state directory.
+.TP
+.I ~/.local/state/mural
+Fallback state directory.
+.TP
+.I $XDG_RUNTIME_DIR/mural/mural.sock
+Preferred IPC socket location when XDG_RUNTIME_DIR is a nonempty absolute path.
+.TP
+.I /tmp/mural-UID/mural.sock
+Owner-only fallback when XDG_RUNTIME_DIR is unavailable. An existing parent
+directory must belong to UID and have no group or other permissions. Set
+.B MURAL_SOCKET
+or pass
+.B --socket
+to choose an explicit path.
+.SH SEE ALSO
+.BR muralctl (1),
+.BR mural-config (5),
+.BR systemd.service (5)

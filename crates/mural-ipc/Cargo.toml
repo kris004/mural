@@ -1,0 +1,13 @@
+[package]
+name = "mural-ipc"
+version = "0.1.0"
+description = "JSON IPC types and codec for mural"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+publish = false
+
+[lints]
+workspace = true

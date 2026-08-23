@@ -1,0 +1,19 @@
+[package]
+name = "muralctl"
+version = "0.1.0"
+description = "Command-line client for the mural Wayland wallpaper daemon"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+publish = false
+
+[dependencies]
+image = { version = "0.25.10", default-features = false, features = ["jpeg", "png", "webp"] }
+mural-core = { path = "../mural-core" }
+mural-ipc = { path = "../mural-ipc" }
+mural-render = { path = "../mural-render" }
+
+[lints]
+workspace = true

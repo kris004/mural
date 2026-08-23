@@ -1,0 +1,16 @@
+[package]
+name = "mural-core"
+version = "0.1.0"
+description = "Configuration and wallpaper-state planning for mural"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+publish = false
+
+[dependencies]
+mural-ipc = { path = "../mural-ipc" }
+
+[lints]
+workspace = true

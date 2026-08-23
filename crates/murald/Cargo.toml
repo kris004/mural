@@ -1,0 +1,32 @@
+[package]
+name = "murald"
+version = "0.1.0"
+description = "GPU-rendered Wayland wallpaper daemon"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+publish = false
+
+[dependencies]
+calloop = "0.14.4"
+calloop-wayland-source = "0.4.1"
+glow = "0.17.0"
+image = { version = "0.25.10", default-features = false, features = ["jpeg", "png", "webp"] }
+khronos-egl = { version = "6.0.0", features = ["dynamic"] }
+libc = "0.2.186"
+mural-core = { path = "../mural-core" }
+mural-ipc = { path = "../mural-ipc" }
+mural-render = { path = "../mural-render" }
+smithay-client-toolkit = "0.20.0"
+wayland-client = { version = "0.31.14", features = ["system"] }
+wayland-egl = "0.32.11"
+
+[lints.rust]
+unsafe_code = "allow"
+missing_debug_implementations = "warn"
+
+[lints.clippy]
+all = "warn"
+pedantic = "warn"
