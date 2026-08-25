@@ -138,8 +138,12 @@ jobs:
 
       - name: Validate generated systemd unit
         run: |
-          make target/murald.service BINDIR="$PWD/target/debug"
-          systemd-analyze --man=no verify target/murald.service
+          unit="$RUNNER_TEMP/mural-target/murald.service"
+          make \
+            CARGO_TARGET_DIR="$RUNNER_TEMP/mural-target" \
+            BINDIR="$RUNNER_TEMP/mural-target/debug" \
+            "$unit"
+          systemd-analyze --man=no verify "$unit"
           grep -Fx \
             'ExecStart=/usr/bin/murald' \
             "$RUNNER_TEMP/mural-stage/usr/lib/systemd/user/murald.service"
