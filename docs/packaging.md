@@ -6,7 +6,14 @@ Wayland compositor with `wlr-layer-shell` plus a working EGL/OpenGL ES 2 stack.
 ## Versioned source
 
 Release tags use `vMAJOR.MINOR.PATCH` and match the single version declared in
-the root workspace manifest. For a release `X.Y.Z`, the source archive is:
+the root workspace manifest. For a release `X.Y.Z`, the attached source asset
+is:
+
+```text
+https://github.com/kris004/mural/releases/download/vX.Y.Z/mural-X.Y.Z-src.tar.gz
+```
+
+GitHub's automatically generated tag archive is also available at:
 
 ```text
 https://github.com/kris004/mural/archive/refs/tags/vX.Y.Z.tar.gz
@@ -21,6 +28,18 @@ The checked-in `Cargo.lock` is part of the release input and must not be
 regenerated during a package build. Use Cargo's `--locked` or stricter
 `--frozen` mode and provide all registry crates through the package manager's
 offline source mechanism.
+
+Release tags are hardware-backed OpenPGP-signed annotated tags that point
+directly to protected `main`. The release workflow rejects unsigned,
+lightweight, indirect, or GitHub-unverified tags. It also publishes
+`SHA256SUMS` and provenance attestations for the attached source and binary
+archives. The project release process is documented in
+[`docs/releasing.md`](releasing.md).
+
+The automatic Gentoo overlay resolves an eligible release tag to its exact
+commit and downloads the commit archive rather than the convenience binary.
+Consequently, the ebuild is independent of the release runner's glibc and
+graphics stack while still building the same committed source and lockfile.
 
 ## Dependencies
 
