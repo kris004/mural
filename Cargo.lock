@@ -328,22 +328,22 @@ dependencies = [
 
 [[package]]
 name = "mural-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "mural-ipc",
 ]
 
 [[package]]
 name = "mural-ipc"
-version = "0.1.0"
+version = "0.1.1"
 
 [[package]]
 name = "mural-render"
-version = "0.1.0"
+version = "0.1.1"
 
 [[package]]
 name = "muralctl"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "image",
  "mural-core",
@@ -353,7 +353,7 @@ dependencies = [
 
 [[package]]
 name = "murald"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "calloop",
  "calloop-wayland-source",
