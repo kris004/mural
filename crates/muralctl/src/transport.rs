@@ -85,16 +85,16 @@ mod tests {
 
     #[test]
     fn send_request_times_out_when_daemon_never_replies() {
-        let dir = std::env::temp_dir().join(format!(
-            "muralctl-timeout-test-{}-{}",
+        // Pathname-backed Unix sockets have a short platform limit. Keep this
+        // fixture independent of a potentially long inherited TMPDIR.
+        let socket_path = std::path::Path::new("/tmp").join(format!(
+            "muralctl-timeout-test-{}-{}.sock",
             std::process::id(),
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .expect("system clock is after Unix epoch")
                 .as_nanos()
         ));
-        fs::create_dir_all(&dir).expect("create temporary socket directory");
-        let socket_path = dir.join("mural.sock");
         let listener = UnixListener::bind(&socket_path).expect("bind fake daemon socket");
         let (release_tx, release_rx) = mpsc::channel();
 
@@ -123,6 +123,6 @@ mod tests {
 
         let _ = release_tx.send(());
         server.join().expect("fake daemon thread exits");
-        fs::remove_dir_all(&dir).expect("remove temporary socket directory");
+        fs::remove_file(&socket_path).expect("remove temporary socket");
     }
 }

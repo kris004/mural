@@ -170,16 +170,22 @@ fn sockaddr_un_len(path_len: usize) -> Result<libc::socklen_t, String> {
 mod tests {
     use std::fs;
     use std::os::unix::net::UnixDatagram;
-    use std::time::Duration;
+    use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
     use super::*;
 
     #[test]
     fn sends_notify_message_to_path_socket() {
-        let dir = env::temp_dir().join(format!("mural-notify-test-{}", std::process::id()));
-        let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(&dir).unwrap();
-        let socket_path = dir.join("notify.sock");
+        // Pathname-backed Unix sockets have a short platform limit. Keep this
+        // fixture independent of a potentially long inherited TMPDIR.
+        let socket_path = std::path::Path::new("/tmp").join(format!(
+            "mural-notify-test-{}-{}.sock",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("system clock is after Unix epoch")
+                .as_nanos()
+        ));
         let listener = match UnixDatagram::bind(&socket_path) {
             Ok(listener) => listener,
             Err(error) if error.kind() == std::io::ErrorKind::PermissionDenied => return,
@@ -189,10 +195,11 @@ mod tests {
             .set_read_timeout(Some(Duration::from_secs(2)))
             .unwrap();
 
-        if let Err(error) = NotifySocket::Path(socket_path).send(b"READY=1\nSTATUS=ready") {
+        if let Err(error) = NotifySocket::Path(socket_path.clone()).send(b"READY=1\nSTATUS=ready") {
             // Some sandboxes deny AF_UNIX datagram sends; the live service
             // path covers the integration behavior.
             if error.contains("Operation not permitted") {
+                fs::remove_file(&socket_path).expect("remove temporary socket");
                 return;
             }
             panic!("{error}");
@@ -201,6 +208,7 @@ mod tests {
         let mut buffer = [0_u8; 128];
         let size = listener.recv(&mut buffer).unwrap();
         assert_eq!(&buffer[..size], b"READY=1\nSTATUS=ready");
+        fs::remove_file(&socket_path).expect("remove temporary socket");
     }
 
     #[test]
