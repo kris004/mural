@@ -9,18 +9,19 @@ DOCDIR ?= $(PREFIX)/share/doc/mural
 PROFILE ?= release
 CARGO ?= cargo
 CARGO_FLAGS ?= --locked
+CARGO_TARGET_DIR ?= target
 INSTALL ?= install
 SYSTEMCTL ?= systemctl
 SED ?= sed
 
-SYSTEMD_UNIT := target/murald.service
+SYSTEMD_UNIT := $(CARGO_TARGET_DIR)/murald.service
 
 ifeq ($(PROFILE),release)
 CARGO_PROFILE_FLAG := --release
-TARGET_DIR := target/release
+TARGET_DIR := $(CARGO_TARGET_DIR)/release
 else
 CARGO_PROFILE_FLAG :=
-TARGET_DIR := target/debug
+TARGET_DIR := $(CARGO_TARGET_DIR)/debug
 endif
 
 .PHONY: all build check test clippy install uninstall install-service \
@@ -42,7 +43,7 @@ clippy:
 	$(CARGO) clippy --all-targets --all-features $(CARGO_FLAGS) -- -D warnings
 
 $(SYSTEMD_UNIT): dist/systemd/murald.service.in Makefile FORCE
-	mkdir -p target
+	mkdir -p $(dir $@)
 	$(SED) 's|@BINDIR@|$(BINDIR)|g' $< > $@
 
 FORCE:

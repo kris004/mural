@@ -2,9 +2,9 @@
 
 ## Supported versions
 
-Mural has not made a stable release. Security fixes currently target the latest
-`main` branch only. This policy will be updated when versioned releases have a
-supported lifetime.
+Security fixes target the latest versioned release and the current `main`
+branch. Older pre-1.0 releases do not receive a guaranteed backport; affected
+versions and upgrade guidance will be stated with each coordinated fix.
 
 ## Reporting a vulnerability
 

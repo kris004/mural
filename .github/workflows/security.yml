@@ -3,13 +3,9 @@ name: Dependency security audit
 
 "on":
   push:
-    paths:
-      - "**/Cargo.toml"
-      - Cargo.lock
+    branches:
+      - "**"
   pull_request:
-    paths:
-      - "**/Cargo.toml"
-      - Cargo.lock
   schedule:
     - cron: "23 7 * * 1"
   workflow_dispatch:
@@ -27,6 +23,8 @@ jobs:
       - name: Check out repository
         # actions/checkout v7.0.1
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
 
       - name: Audit Cargo.lock
         # Node 24 support is newer than upstream's latest tagged release.

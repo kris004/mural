@@ -49,8 +49,7 @@ Build requirements:
 - Rust 1.95 or newer and Cargo;
 - `pkg-config`;
 - Wayland client and Wayland EGL development files;
-- xkbcommon development files;
-- EGL and OpenGL ES development files.
+- xkbcommon development files.
 
 Runtime requirements:
 
@@ -67,6 +66,55 @@ Mural does not currently claim support for every compositor or GPU stack. The
 [compatibility matrix](docs/compatibility.md) explains the current support
 boundary and test bar. Please include the compositor, GPU, driver, and Mural
 version when reporting a problem.
+
+## Release downloads
+
+Versioned releases provide:
+
+- `mural-VERSION-src.tar.gz`, containing the exact tagged source;
+- `mural-VERSION-linux-x86_64-gnu.tar.gz`, containing `murald`, `muralctl`,
+  manuals, licenses, the sample config, and a user service laid out for
+  `$HOME/.local`; and
+- `SHA256SUMS`, covering both archives.
+
+The x86-64 archive is a convenience build for GNU/Linux systems. It remains
+dynamically linked to glibc, Wayland, xkbcommon, and the host graphics stack;
+distribution packages or the source archive are preferable when available.
+
+After downloading all three assets, verify their checksums and GitHub build
+provenance:
+
+```sh
+GITHUB_REPOSITORY=kris004/mural
+sha256sum --check SHA256SUMS
+for artifact in mural-VERSION-*.tar.gz SHA256SUMS; do
+  gh attestation verify "$artifact" --repo "$GITHUB_REPOSITORY"
+done
+```
+
+Release tags are signed annotated tags. The expected OpenPGP primary-key
+fingerprint is `BE59 2562 E613 1A53 F4BA DE4A 0469 28E9 A919 BAF9`. To verify
+the tag after importing that public key:
+
+```sh
+git fetch origin tag vVERSION
+git tag --verify vVERSION
+```
+
+Install the convenience archive without root access by extracting it into the
+user-local prefix, then start the included service from a graphical session:
+
+```sh
+mkdir -p "$HOME/.local"
+tar -xzf mural-VERSION-linux-x86_64-gnu.tar.gz \
+  --strip-components=1 -C "$HOME/.local"
+systemctl --user daemon-reload
+systemctl --user enable --now murald.service
+```
+
+Every release produced by the current workflow is immutable: its tag and
+assets cannot be replaced after publication. See the
+[release inputs](docs/releasing.md) for Mural's gates and artifact contract.
 
 ## Install from source
 

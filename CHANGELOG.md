@@ -6,6 +6,10 @@ explicitly before a release.
 
 ## Unreleased
 
+## 0.1.0 - 2026-08-24
+
+This is the first versioned source release of Mural.
+
 ### Added
 
 - Public contribution, support, security, transition-authoring, and sample-config
@@ -24,6 +28,9 @@ explicitly before a release.
 - CI coverage for the declared Rust 1.95 minimum, stable Rust, Clippy, rustdoc,
   manual pages, the generated systemd unit, staged installation, and scheduled
   RustSec dependency audits.
+- A signed-tag release pipeline that builds and tests once, publishes exact
+  source and x86-64 GNU/Linux archives with SHA-256 checksums and provenance
+  attestations, and verifies immutable publication.
 
 ### Changed
 

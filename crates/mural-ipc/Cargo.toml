@@ -1,6 +1,6 @@
 [package]
 name = "mural-ipc"
-version = "0.1.0"
+version.workspace = true
 description = "JSON IPC types and codec for mural"
 edition.workspace = true
 license.workspace = true

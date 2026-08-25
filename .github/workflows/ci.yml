@@ -3,6 +3,8 @@ name: CI
 
 "on":
   push:
+    branches:
+      - "**"
   pull_request:
 
 permissions:
@@ -21,14 +23,15 @@ jobs:
         rust: ["1.95.0", "stable"]
     steps:
       - name: Check out repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        # actions/checkout v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
 
       - name: Install native dependencies
         run: |
           sudo apt-get update
           sudo apt-get install --yes \
-            libegl1-mesa-dev \
-            libgles2-mesa-dev \
             libwayland-dev \
             libxkbcommon-dev \
             pkg-config
@@ -46,14 +49,15 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Check out repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        # actions/checkout v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
 
       - name: Install native dependencies and validators
         run: |
           sudo apt-get update
           sudo apt-get install --yes \
-            libegl1-mesa-dev \
-            libgles2-mesa-dev \
             libwayland-dev \
             libxkbcommon-dev \
             mandoc \
@@ -74,6 +78,17 @@ jobs:
           cargo clippy --workspace --all-targets --all-features --locked
           -- -D warnings
 
+      - name: Validate release metadata
+        shell: bash
+        run: |
+          version="$(cargo pkgid -p murald --locked)"
+          version="${version##*#}"
+          grep -Eq "^## ${version//./\\.} - [0-9]{4}-[0-9]{2}-[0-9]{2}$" \
+            CHANGELOG.md
+          if [[ "${GITHUB_REF_TYPE}" == tag ]]; then
+            [[ "${GITHUB_REF_NAME}" == "v${version}" ]]
+          fi
+
       - name: Build API documentation
         env:
           RUSTDOCFLAGS: -D warnings
@@ -87,7 +102,7 @@ jobs:
 
       - name: Exercise staged install
         run: |
-          make \
+          CARGO_TARGET_DIR="$RUNNER_TEMP/mural-target" make \
             PROFILE=debug \
             DESTDIR="$RUNNER_TEMP/mural-stage" \
             PREFIX=/usr \
@@ -97,10 +112,38 @@ jobs:
             SYSTEMD_USER_DIR=/usr/lib/systemd/user \
             install
 
+      - name: Validate staged install layout
+        shell: bash
+        run: |
+          stage="$RUNNER_TEMP/mural-stage"
+          cat > "$RUNNER_TEMP/mural-stage.expected" <<'EOF'
+          usr/bin/muralctl
+          usr/bin/murald
+          usr/lib/systemd/user/murald.service
+          usr/share/doc/mural/examples/config
+          usr/share/licenses/mural/LICENSE-APACHE
+          usr/share/licenses/mural/LICENSE-MIT
+          usr/share/man/man1/muralctl.1
+          usr/share/man/man1/murald.1
+          usr/share/man/man5/mural-config.5
+          usr/share/man/man7/mural.7
+          EOF
+          find "$stage" -type f -printf '%P\n' | sort \
+            > "$RUNNER_TEMP/mural-stage.actual"
+          diff -u \
+            "$RUNNER_TEMP/mural-stage.expected" \
+            "$RUNNER_TEMP/mural-stage.actual"
+          "$stage/usr/bin/murald" --version
+          "$stage/usr/bin/muralctl" --version
+
       - name: Validate generated systemd unit
         run: |
-          make target/murald.service BINDIR="$PWD/target/debug"
-          systemd-analyze --man=no verify target/murald.service
+          unit="$RUNNER_TEMP/mural-target/murald.service"
+          make \
+            CARGO_TARGET_DIR="$RUNNER_TEMP/mural-target" \
+            BINDIR="$RUNNER_TEMP/mural-target/debug" \
+            "$unit"
+          systemd-analyze --man=no verify "$unit"
           grep -Fx \
             'ExecStart=/usr/bin/murald' \
             "$RUNNER_TEMP/mural-stage/usr/lib/systemd/user/murald.service"
