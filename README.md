@@ -49,8 +49,7 @@ Build requirements:
 - Rust 1.95 or newer and Cargo;
 - `pkg-config`;
 - Wayland client and Wayland EGL development files;
-- xkbcommon development files;
-- EGL and OpenGL ES development files.
+- xkbcommon development files.
 
 Runtime requirements:
 

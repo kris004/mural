@@ -6,6 +6,10 @@ explicitly before a release.
 
 ## Unreleased
 
+## 0.1.0 - 2026-08-24
+
+This is the first versioned source release of Mural.
+
 ### Added
 
 - Public contribution, support, security, transition-authoring, and sample-config

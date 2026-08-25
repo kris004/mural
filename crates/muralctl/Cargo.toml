@@ -1,6 +1,6 @@
 [package]
 name = "muralctl"
-version = "0.1.0"
+version.workspace = true
 description = "Command-line client for the mural Wayland wallpaper daemon"
 edition.workspace = true
 license.workspace = true

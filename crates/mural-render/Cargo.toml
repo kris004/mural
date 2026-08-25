@@ -1,6 +1,6 @@
 [package]
 name = "mural-render"
-version = "0.1.0"
+version.workspace = true
 description = "Deterministic transition and layout math for mural"
 edition.workspace = true
 license.workspace = true
