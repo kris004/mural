@@ -6,6 +6,14 @@ explicitly before a release.
 
 ## Unreleased
 
+## 0.1.1 - 2026-08-25
+
+### Fixed
+
+- Unix-socket test fixtures now use unique short paths so source-package tests
+  pass when builders inherit a temporary directory that exceeds the platform
+  socket-path limit. Runtime socket behavior is unchanged.
+
 ## 0.1.0 - 2026-08-24
 
 This is the first versioned source release of Mural.

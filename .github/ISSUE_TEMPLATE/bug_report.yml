@@ -23,7 +23,7 @@ body:
     attributes:
       label: Mural version
       description: Paste `muralctl --version` or the tested Git commit.
-      placeholder: muralctl 0.1.0 or commit SHA
+      placeholder: muralctl 0.1.1 or commit SHA
     validations:
       required: true
 
