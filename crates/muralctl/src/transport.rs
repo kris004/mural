@@ -74,6 +74,7 @@ fn format_duration(duration: Duration) -> String {
 mod tests {
     use std::fs;
     use std::io::Read as _;
+    use std::os::fd::AsRawFd;
     use std::os::unix::net::UnixListener;
     use std::sync::mpsc;
     use std::thread;
@@ -85,16 +86,19 @@ mod tests {
 
     #[test]
     fn send_request_times_out_when_daemon_never_replies() {
-        // Pathname-backed Unix sockets have a short platform limit. Keep this
-        // fixture independent of a potentially long inherited TMPDIR.
-        let socket_path = std::path::Path::new("/tmp").join(format!(
-            "muralctl-timeout-test-{}-{}.sock",
-            std::process::id(),
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("system clock is after Unix epoch")
-                .as_nanos()
-        ));
+        // Keep the socket node inside the inherited temporary directory while
+        // using a short proc-fd alias that cannot overflow sockaddr_un::sun_path.
+        let temp_dir = fs::File::open(std::env::temp_dir()).expect("open temporary directory");
+        let socket_path = std::path::Path::new("/proc/self/fd")
+            .join(temp_dir.as_raw_fd().to_string())
+            .join(format!(
+                "muralctl-timeout-test-{}-{}.sock",
+                std::process::id(),
+                SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .expect("system clock is after Unix epoch")
+                    .as_nanos()
+            ));
         let listener = UnixListener::bind(&socket_path).expect("bind fake daemon socket");
         let (release_tx, release_rx) = mpsc::channel();
 
@@ -124,5 +128,6 @@ mod tests {
         let _ = release_tx.send(());
         server.join().expect("fake daemon thread exits");
         fs::remove_file(&socket_path).expect("remove temporary socket");
+        drop(temp_dir);
     }
 }

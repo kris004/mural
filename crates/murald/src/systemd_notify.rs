@@ -176,16 +176,19 @@ mod tests {
 
     #[test]
     fn sends_notify_message_to_path_socket() {
-        // Pathname-backed Unix sockets have a short platform limit. Keep this
-        // fixture independent of a potentially long inherited TMPDIR.
-        let socket_path = std::path::Path::new("/tmp").join(format!(
-            "mural-notify-test-{}-{}.sock",
-            std::process::id(),
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("system clock is after Unix epoch")
-                .as_nanos()
-        ));
+        // Keep the socket node inside the inherited temporary directory while
+        // using a short proc-fd alias that cannot overflow sockaddr_un::sun_path.
+        let temp_dir = fs::File::open(env::temp_dir()).expect("open temporary directory");
+        let socket_path = Path::new("/proc/self/fd")
+            .join(temp_dir.as_raw_fd().to_string())
+            .join(format!(
+                "mural-notify-test-{}-{}.sock",
+                std::process::id(),
+                SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .expect("system clock is after Unix epoch")
+                    .as_nanos()
+            ));
         let listener = match UnixDatagram::bind(&socket_path) {
             Ok(listener) => listener,
             Err(error) if error.kind() == std::io::ErrorKind::PermissionDenied => return,
@@ -200,6 +203,7 @@ mod tests {
             // path covers the integration behavior.
             if error.contains("Operation not permitted") {
                 fs::remove_file(&socket_path).expect("remove temporary socket");
+                drop(temp_dir);
                 return;
             }
             panic!("{error}");
@@ -209,6 +213,7 @@ mod tests {
         let size = listener.recv(&mut buffer).unwrap();
         assert_eq!(&buffer[..size], b"READY=1\nSTATUS=ready");
         fs::remove_file(&socket_path).expect("remove temporary socket");
+        drop(temp_dir);
     }
 
     #[test]
