@@ -7,12 +7,10 @@ It keeps one persistent background surface per output, renders transitions with
 EGL/OpenGL ES, and exposes a small command-line and JSON IPC control plane for
 shell scripts, keybindings, bars, and launchers.
 
-![Synthetic push transition rendered by Mural](docs/assets/mural-demo.gif)
+![Mural pushing from a mountain lake to a sunny meadow, then fading back](docs/assets/mural-demo.gif)
 
-This privacy-safe demo was rendered from generated gradients in a headless Sway
-session; it is not a capture of a user's desktop. See the
-[compatibility matrix](docs/compatibility.md) before treating a compositor or
-GPU combination as supported.
+Push and fade transitions rendered by Mural using CC0 landscape photography.
+[Photo credits and capture details](docs/assets/README.md).
 
 > [!WARNING]
 > Mural is pre-1.0 alpha software. Sway is the primary tested compositor. Other
