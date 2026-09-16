@@ -1,6 +1,6 @@
 # README demo
 
-`mural-demo.gif` shows Mural's actual `push:left` and `fade` transitions between
+`mural-demo.webp` shows Mural's actual `push:left` and `fade` transitions between
 two landscape photographs. It was captured in an isolated headless Sway session,
 not from a user's desktop.
 
@@ -16,7 +16,7 @@ Republic and downloaded from Wikimedia Commons. Both are offered under the
 | Meadow Landscape Field | [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Meadow_Landscape_Field.jpg) | [ISO Republic](https://isorepublic.com/photo/meadow-landscape-field/) |
 
 The photographs were scaled and center-cropped by Mural's `fill` mode, then
-downscaled and palette-quantized for the GIF. Their CC0 dedication is separate
+downscaled and encoded as animated WebP. Their CC0 dedication is separate
 from Mural's software licenses.
 
 ## Capture details
@@ -29,16 +29,22 @@ from Mural's software licenses.
 - Lake set with `cut`, then meadow with `push:left --mode screen`, then lake
   with `fade`. Both animated transitions use `--duration-ms 1000` and
   `--easing ease-in-out-cubic`.
-- Six seconds captured with `grim` at 25 frames per second. The first and last
-  frames match, so the loop has no abrupt reset.
-- GIF encoded at 640 × 360 and 20 frames per second with FFmpeg:
+- Six seconds captured with `grim` at 25 frames per second. The source capture
+  starts and ends on the same landscape, so the loop has no abrupt reset.
+- Animated WebP encoded at 640 × 360 and 20 frames per second with FFmpeg:
 
   ```sh
   ffmpeg -framerate 25 -i frames/%04d.ppm \
-    -filter_complex \
-    '[0:v]fps=20,scale=640:360:flags=lanczos,split[frames][colors];[colors]palettegen=max_colors=192:stats_mode=full[palette];[frames][palette]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle' \
-    -loop 0 mural-demo.gif
+    -vf 'fps=20,scale=640:360:flags=lanczos' \
+    -c:v libwebp_anim -quality 75 -compression_level 6 \
+    -loop 0 mural-demo.webp
   ```
+
+Keep the animation below 1 MB and check playback in the rendered GitHub README,
+not just a local decoder. The previous 5.1 MB GIF left a blank area while
+GitHub's animation player waited for the download to finish. WebP preserves the
+photographs' full color without GIF palette dithering and reduces the download
+to about 834 KB.
 
 This documentation capture does not establish hardware or compositor support;
 see the [compatibility matrix](../compatibility.md).

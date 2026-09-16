@@ -7,7 +7,7 @@ It keeps one persistent background surface per output, renders transitions with
 EGL/OpenGL ES, and exposes a small command-line and JSON IPC control plane for
 shell scripts, keybindings, bars, and launchers.
 
-![Mural pushing from a mountain lake to a sunny meadow, then fading back](docs/assets/mural-demo.gif)
+![Mural pushing from a mountain lake to a sunny meadow, then fading back](docs/assets/mural-demo.webp)
 
 Push and fade transitions rendered by Mural using CC0 landscape photography.
 [Photo credits and capture details](docs/assets/README.md).
