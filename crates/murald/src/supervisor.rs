@@ -36,6 +36,7 @@ use crate::library_watcher::LibraryWatcher;
 use crate::systemd_notify::SystemdNotify;
 use crate::transitions::canvas::resolve_canvas_tile_count_for_pan;
 use crate::{TraceMode, transition_name, validate_configured_world_cache, validate_image_paths};
+use crate::{decode::ImageLoadError, quarantine};
 
 const PUBLIC_READ_TIMEOUT: Duration = Duration::from_secs(2);
 const PUBLIC_IDLE_SLEEP: Duration = Duration::from_millis(50);
@@ -485,6 +486,15 @@ impl Supervisor {
             return Ok(skipped_wallpaper_action_response(&request.action, outputs));
         }
 
+        quarantine::retry(|| self.try_wallpaper_action(request, outputs, health_outputs))
+    }
+
+    fn try_wallpaper_action(
+        &mut self,
+        request: &WallpaperRequest,
+        outputs: &[ActiveOutput],
+        health_outputs: &[HealthOutput],
+    ) -> Result<Option<WallpaperResponse>, String> {
         let mut transition = request
             .transition
             .unwrap_or_else(|| self.config.transition_for_action(&request.action));
@@ -501,7 +511,10 @@ impl Supervisor {
             .iter()
             .map(|entry| (entry.output.clone(), entry.path.clone()))
             .collect::<BTreeMap<_, _>>();
-        validate_image_paths(&request_outputs)?;
+        if let Err(message) = validate_image_paths(&request_outputs) {
+            self.wallpaper.rollback_wallpaper_change(prepared);
+            return Err(message);
+        }
 
         if is_world_transition {
             let result = self.validate_world_cache_for_prepared_change(&prepared, health_outputs);
@@ -527,13 +540,15 @@ impl Supervisor {
         }
 
         let mut prepared = prepared;
-        self.wallpaper.move_quarantine(&mut prepared)?;
-        let render_result = self.render_prepared_change(&prepared, transition, scale_mode);
-        if let Err(message) = render_result {
+        if let Err(message) = self.wallpaper.move_quarantine(&mut prepared) {
             self.wallpaper.rollback_wallpaper_change(prepared);
             return Err(message);
         }
-        let response = self.wallpaper.commit_wallpaper_change(prepared)?;
+        let result = self.render_prepared_change(&prepared, transition, scale_mode);
+        let Some(response) = quarantine::finish_render(&mut self.wallpaper, prepared, result)?
+        else {
+            return Ok(None);
+        };
         if matches!(transition, Transition::World { .. }) {
             let near_future = self
                 .wallpaper
@@ -544,7 +559,7 @@ impl Supervisor {
                 &near_future,
             );
         }
-        Ok(response)
+        Ok(Some(response))
     }
 
     fn render_prepared_change(
@@ -552,31 +567,33 @@ impl Supervisor {
         prepared: &PreparedWallpaperChange,
         transition: Transition,
         scale_mode: mural_ipc::ScaleMode,
-    ) -> Result<(), String> {
+    ) -> Result<(), ImageLoadError> {
         let outputs = prepared
             .entries
             .iter()
             .map(|entry| (entry.output.clone(), entry.path.clone()))
             .collect::<BTreeMap<_, _>>();
-        let response = if matches!(transition, Transition::Canvas { .. }) {
-            let request = self.canvas_render_request(prepared, transition, scale_mode, outputs)?;
-            self.renderer_request(&Request::RenderCanvasSet(request), RENDERER_RENDER_TIMEOUT)?
+        let render = if matches!(transition, Transition::Canvas { .. }) {
+            Request::RenderCanvasSet(
+                self.canvas_render_request(prepared, transition, scale_mode, outputs)?,
+            )
         } else if matches!(transition, Transition::World { .. }) {
-            let request = self.world_render_request(prepared, transition, scale_mode, outputs)?;
-            self.renderer_request(&Request::RenderWorldSet(request), RENDERER_RENDER_TIMEOUT)?
+            Request::RenderWorldSet(
+                self.world_render_request(prepared, transition, scale_mode, outputs)?,
+            )
         } else {
-            let request = SetRequest {
+            Request::Set(SetRequest {
                 outputs,
                 transition,
                 scale_mode,
                 allow_partial: false,
-            };
-            self.renderer_request(&Request::Set(request), RENDERER_RENDER_TIMEOUT)?
+            })
         };
-        if response_is_error(&response) {
-            return Err(response_error_message(&response).unwrap_or(response));
-        }
-        Ok(())
+        let response = self.renderer_request(
+            &Request::RenderLibrary(Box::new(render)),
+            RENDERER_RENDER_TIMEOUT,
+        )?;
+        quarantine::render_result(response)
     }
 
     fn validate_world_cache_for_prepared_change(
@@ -965,23 +982,18 @@ impl Supervisor {
         if outputs.is_empty() {
             return;
         }
-        let prepared = match self.wallpaper.prepare_startup_display(&outputs) {
-            Ok(prepared) => prepared,
-            Err(message) => {
-                eprintln!("murald: {reason} restore skipped: {message}");
-                return;
-            }
-        };
-        let scale_mode = self.config.scale_mode;
-        match self.render_prepared_change(&prepared, Transition::Cut, scale_mode) {
-            Ok(()) => match self.wallpaper.commit_wallpaper_change(prepared) {
-                Ok(response) => eprintln!(
-                    "murald: {reason} restored {} wallpaper(s)",
-                    response.entries.len()
-                ),
-                Err(message) => eprintln!("murald: {reason} restore commit failed: {message}"),
-            },
-            Err(message) => eprintln!("murald: {reason} restore render failed: {message}"),
+        let result = quarantine::retry(|| {
+            let prepared = self.wallpaper.prepare_startup_display(&outputs)?;
+            let result =
+                self.render_prepared_change(&prepared, Transition::Cut, self.config.scale_mode);
+            quarantine::finish_render(&mut self.wallpaper, prepared, result)
+        });
+        match result {
+            Ok(response) => eprintln!(
+                "murald: {reason} restored {} wallpaper(s)",
+                response.entries.len()
+            ),
+            Err(message) => eprintln!("murald: {reason} restore failed: {message}"),
         }
     }
 
@@ -991,10 +1003,25 @@ impl Supervisor {
         }
         self.last_restore_check = Instant::now();
 
-        let health = match self.renderer_health() {
-            Ok(health) => health,
+        let response = match self.renderer_request(&Request::PollRenderer, RENDERER_HEALTH_TIMEOUT)
+        {
+            Ok(response) => response,
             Err(message) => {
                 eprintln!("murald: renderer surface restore check skipped: {message}");
+                return;
+            }
+        };
+        let health = match parse_health_response(&response) {
+            Ok(health) => health,
+            Err(error) => {
+                if let Some(image) = mural_ipc::response_invalid_image(&response) {
+                    let outputs = self.active_outputs().unwrap_or_default();
+                    if quarantine::recover_deferred(&mut self.wallpaper, &outputs, &image) {
+                        self.restore_current_wallpapers("deferred image rejection");
+                    }
+                } else {
+                    eprintln!("murald: invalid renderer poll response: {error}");
+                }
                 return;
             }
         };
@@ -1048,6 +1075,9 @@ impl Supervisor {
             .join(", ");
         match self.render_cut_outputs(render_outputs, self.config.scale_mode) {
             Ok(()) => eprintln!("murald: restored renderer surface(s): {names}"),
+            Err(ImageLoadError::Invalid(_)) => {
+                self.restore_current_wallpapers("rejected restore target");
+            }
             Err(message) => eprintln!("murald: renderer surface restore failed: {message}"),
         }
     }
@@ -1056,7 +1086,7 @@ impl Supervisor {
         &mut self,
         outputs: BTreeMap<String, String>,
         scale_mode: mural_ipc::ScaleMode,
-    ) -> Result<(), String> {
+    ) -> Result<(), ImageLoadError> {
         validate_image_paths(&outputs)?;
         let request = SetRequest {
             outputs,
@@ -1065,10 +1095,7 @@ impl Supervisor {
             allow_partial: false,
         };
         let response = self.renderer_request(&Request::Set(request), RENDERER_RENDER_TIMEOUT)?;
-        if response_is_error(&response) {
-            return Err(response_error_message(&response).unwrap_or(response));
-        }
-        Ok(())
+        quarantine::render_result(response)
     }
 
     fn active_outputs(&mut self) -> Result<Vec<ActiveOutput>, String> {
@@ -1804,7 +1831,7 @@ mod tests {
             &[active("DP-1"), active("DP-2")],
         );
         assert_eq!(response.action, "next");
-        assert!(response.entries.is_empty());
+        assert_eq!(response.entries, []);
         assert!(response.message.contains("all target outputs are off"));
         assert!(response.message.contains("DP-1, DP-2"));
     }

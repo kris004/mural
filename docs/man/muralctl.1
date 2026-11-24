@@ -77,6 +77,12 @@ Replace the current wallpaper at output index INDEX.
 .TP
 .BI quarantine " INDEX"
 Move the current wallpaper at INDEX to the quarantine directory and replace it.
+This is separate from automatic quarantine: when the decoder rejects a regular
+library image, the daemon moves it to
+.I quarantine_dir/auto/
+and selects a replacement. Explicit
+.B set
+requests never authorize a move.
 The misspelling
 .B quarentine
 is accepted for compatibility.

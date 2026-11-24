@@ -213,6 +213,7 @@ impl MuralApp {
     fn schedule_canvas_target_decodes(&self, uploads: &[CanvasUpload]) -> Result<(), Response> {
         for upload in uploads {
             let job = DecodeJob {
+                library_target: self.library_render,
                 id: upload.decode_id,
                 image_path: upload.image_path.clone(),
             };
@@ -266,6 +267,7 @@ impl MuralApp {
             let id = self.next_decode_id();
             self.surfaces[surface_index].enqueue_wallpaper_transition(
                 QueuedWallpaper {
+                    library_target: self.library_render,
                     id,
                     image_path: target.image_path,
                     scale_mode,

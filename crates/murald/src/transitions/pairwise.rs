@@ -188,8 +188,7 @@ impl MuralApp {
         let surface_index = target.surface_index;
         let surface_name = target.name;
         trace_log!(self.trace, "set_pairwise_wallpapers: decode {surface_name}");
-        let image = image_loader::load(&target.image_path)
-            .map_err(|message| Response::Error { message })?;
+        let image = image_loader::load(&target.image_path).map_err(Response::from)?;
         trace_log!(
             self.trace,
             "set_pairwise_wallpapers: decoded {surface_name}"
@@ -281,6 +280,7 @@ impl MuralApp {
             );
             self.surfaces[surface_index].enqueue_wallpaper_transition(
                 QueuedWallpaper {
+                    library_target: self.library_render,
                     id,
                     image_path: target.image_path,
                     scale_mode,

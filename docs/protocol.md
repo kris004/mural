@@ -495,6 +495,17 @@ Supported actions:
 - `current`
 - `rescan`
 
+Managed selection and restore retry after a definitive source decode rejection.
+Only the rejected, unchanged regular file in the indexed top-level library is
+moved, into `quarantine_dir/auto/`; manual `quarantine` stays in `quarantine_dir`.
+A synchronous request stops after eight consecutive rejections (or when no
+candidate remains). Queued transitions can report a rejection after their ACK;
+a newer committed selection is not advanced to replace an obsolete target.
+Explicit `set`, cache/thumbnail errors, ordinary I/O failures and GPU errors do
+not authorize file moves. A decoder error response may carry `invalid_image`
+(path) and `image_version` (opaque identity) alongside the usual `status` and
+`message`; no client migration is required.
+
 Successful response:
 
 ```json

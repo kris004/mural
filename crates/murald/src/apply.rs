@@ -13,18 +13,27 @@ impl MuralApp {
         mut prepared: PreparedWallpaperChange,
         transition: Transition,
         scale_mode: ScaleMode,
-    ) -> Result<mural_ipc::WallpaperResponse, String> {
+    ) -> Result<Option<mural_ipc::WallpaperResponse>, String> {
         if matches!(transition, Transition::World { .. }) {
             return Err(world_transition_not_ready_message());
         }
         debug_assert_eq!(prepared.entries.len(), prepared.selection.len());
-        let canvas_preview = self.canvas_preview_for_prepared_change(&prepared, transition)?;
+        let canvas_preview = match self.canvas_preview_for_prepared_change(&prepared, transition) {
+            Ok(preview) => preview,
+            Err(message) => {
+                self.wallpaper.rollback_wallpaper_change(prepared);
+                return Err(message);
+            }
+        };
         trace_log!(
             self.trace,
             "apply wallpaper change {}: move_quarantine",
             prepared.action
         );
-        self.wallpaper.move_quarantine(&mut prepared)?;
+        if let Err(message) = self.wallpaper.move_quarantine(&mut prepared) {
+            self.wallpaper.rollback_wallpaper_change(prepared);
+            return Err(message);
+        }
         let outputs = prepared
             .entries
             .iter()
@@ -50,26 +59,19 @@ impl MuralApp {
             scale_mode,
             allow_partial: false,
         };
+        self.library_render = true;
         let response = if let Some(preview) = canvas_preview {
             self.set_canvas_wallpapers_from_preview(&request, &preview)
         } else {
             self.set_wallpapers(&request)
         };
-        if let Response::Error { message } = response {
-            trace_log!(
-                self.trace,
-                "apply wallpaper change {}: set_wallpapers error: {message}",
-                prepared.action
-            );
-            self.wallpaper.rollback_wallpaper_change(prepared);
-            return Err(message);
-        }
-        trace_log!(
-            self.trace,
-            "apply wallpaper change {}: commit state",
-            prepared.action
-        );
-        self.wallpaper.commit_wallpaper_change(prepared)
+        self.library_render = false;
+        let result = match response {
+            Response::Error { message } => Err(crate::decode::ImageLoadError::Other(message)),
+            Response::InvalidImage(image) => Err(crate::decode::ImageLoadError::Invalid(image)),
+            _ => Ok(()),
+        };
+        crate::quarantine::finish_render(&mut self.wallpaper, prepared, result)
     }
 
     pub(crate) fn set_wallpapers(&mut self, request: &SetRequest) -> Response {

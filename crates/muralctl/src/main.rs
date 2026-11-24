@@ -3892,7 +3892,7 @@ mod tests {
             &tiles,
         );
 
-        assert!(selected.is_empty());
+        assert_eq!(selected, []);
     }
 
     #[test]

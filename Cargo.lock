@@ -331,6 +331,7 @@ name = "mural-core"
 version = "0.1.1"
 dependencies = [
  "mural-ipc",
+ "rustix",
 ]
 
 [[package]]

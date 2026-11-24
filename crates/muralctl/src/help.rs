@@ -15,7 +15,7 @@ pub(crate) fn print_wallpaper_help(command: &str) {
     let defaults_note = "Defaults are read by murald from its config file unless overridden here.\n\n--transition accepts cut, fade, world, push:DIR, or canvas. --mode selects portal|screen|pan for push transitions, or clipped|morph|overlap|collage|span for canvas transitions. --canvas-walk selects paged row/column canvas order or the older centered strip walk. Canvas modes collage and span require --canvas-walk strip.";
     match command {
         "next" => println!(
-            "USAGE:\n    muralctl next [--json] [--transition NAME] [--duration-ms MS] [--easing NAME] [--mode NAME] {canvas_options} [--scale-mode NAME]\n\n{defaults_note}"
+            "USAGE:\n    muralctl next [--json] [--transition NAME] [--duration-ms MS] [--easing NAME] [--mode NAME] {canvas_options} [--scale-mode NAME]\n\nDecoder-rejected library images are moved to quarantine_dir/auto/ and skipped.\n\n{defaults_note}"
         ),
         "back" => println!(
             "USAGE:\n    muralctl back [--json] [--transition NAME] [--duration-ms MS] [--easing NAME] [--mode NAME] {canvas_options} [--scale-mode NAME]\n\n{defaults_note}"
@@ -27,7 +27,7 @@ pub(crate) fn print_wallpaper_help(command: &str) {
             "USAGE:\n    muralctl replace INDEX [--json] [--transition NAME] [--duration-ms MS] [--easing NAME] [--mode NAME] {canvas_options} [--scale-mode NAME]\n\n{defaults_note}"
         ),
         "quarantine" | "quarentine" => println!(
-            "USAGE:\n    muralctl quarantine INDEX [--json] [--transition NAME] [--duration-ms MS] [--easing NAME] [--mode NAME] {canvas_options} [--scale-mode NAME]\n\n{defaults_note}"
+            "USAGE:\n    muralctl quarantine INDEX [--json] [--transition NAME] [--duration-ms MS] [--easing NAME] [--mode NAME] {canvas_options} [--scale-mode NAME]\n\nMoves your pick directly into quarantine_dir, separate from automatic moves in auto/.\n\n{defaults_note}"
         ),
         "favorite" => println!("USAGE:\n    muralctl favorite INDEX [--json]"),
         "unfavorite" => println!("USAGE:\n    muralctl unfavorite INDEX [--json]"),

@@ -806,6 +806,7 @@ impl OutputSurface {
             }
 
             let job = DecodeJob {
+                library_target: queued.library_target,
                 id: queued.id,
                 image_path: queued.image_path.clone(),
             };
@@ -831,7 +832,7 @@ impl OutputSurface {
 
         queued.state = match result.result {
             Ok(image) => QueuedState::Decoded(image),
-            Err(message) => QueuedState::Failed(message),
+            Err(message) => QueuedState::Failed(message.into()),
         };
     }
 
@@ -859,7 +860,7 @@ impl OutputSurface {
             Ok(image) => image,
             Err(message) => {
                 self.restore_old_transition_wallpaper(egl_state);
-                return Err(message);
+                return Err(message.into());
             }
         };
         let texture = match self.upload_wallpaper_texture(egl_state, &image) {

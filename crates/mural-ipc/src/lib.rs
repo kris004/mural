@@ -216,6 +216,10 @@ pub enum Request {
     Clear(ClearRequest),
     Wallpaper(WallpaperRequest),
     Cache(CacheRequest),
+    /// Private wrapper indicating these targets were selected by the library owner.
+    RenderLibrary(Box<Request>),
+    /// Private health poll which delivers a deferred library rejection first, if any.
+    PollRenderer,
     RenderCanvasSet(RenderCanvasSetRequest),
     RenderWorldSet(RenderWorldSetRequest),
     Stop,
@@ -434,14 +438,29 @@ pub enum ScaleMode {
 /// A response returned by `murald`.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Response {
-    Pong { version: u32 },
+    Pong {
+        version: u32,
+    },
     Capabilities(CapabilitiesResponse),
-    Ack { message: String },
+    Ack {
+        message: String,
+    },
     Health(Box<HealthResponse>),
     Query(QueryResponse),
     Wallpaper(WallpaperResponse),
     Cache(CacheResponse),
-    Error { message: String },
+    Error {
+        message: String,
+    },
+    /// A source the decoder rejected, not a transport, I/O or renderer failure.
+    InvalidImage(InvalidImage),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct InvalidImage {
+    pub path: String,
+    pub version: String,
+    pub message: String,
 }
 
 /// Query response containing current daemon state.
@@ -978,6 +997,11 @@ impl Request {
                 }
                 object(fields)
             }
+            Self::RenderLibrary(render) => object([
+                ("type", json_string("renderer_library")),
+                ("render", render.to_json()),
+            ]),
+            Self::PollRenderer => object([("type", json_string("renderer_poll"))]),
             Self::RenderCanvasSet(request) => object([
                 ("type", json_string("renderer_canvas_set")),
                 ("outputs", encode_string_map(&request.outputs)),
@@ -1088,6 +1112,12 @@ impl Response {
                 ("failed", response.failed.to_string()),
                 ("backend", json_string(&response.backend)),
             ]),
+            Self::InvalidImage(image) => object([
+                ("status", json_string("error")),
+                ("message", json_string(&image.message)),
+                ("invalid_image", json_string(&image.path)),
+                ("image_version", json_string(&image.version)),
+            ]),
             Self::Error { message } => object([
                 ("status", json_string("error")),
                 ("message", json_string(message)),
@@ -1166,9 +1196,29 @@ fn parse_request_with_renderer_control(
         "renderer_world_set" if allow_renderer_control => {
             parse_render_world_set_request(object).map(Request::RenderWorldSet)
         }
-        "renderer_canvas_set" | "renderer_world_set" => Err(ProtocolError::new(format!(
-            "request type is reserved for the internal renderer control channel: {request_type}"
-        ))),
+        "renderer_poll" if allow_renderer_control => Ok(Request::PollRenderer),
+        "renderer_library" if allow_renderer_control => {
+            let render = object
+                .get("render")
+                .ok_or_else(|| ProtocolError::new("missing render request"))?
+                .as_object()?;
+            let request = match required_string(render, "type")? {
+                "set" => Request::Set(parse_set_request(render)?),
+                "renderer_canvas_set" => {
+                    Request::RenderCanvasSet(parse_render_canvas_set_request(render)?)
+                }
+                "renderer_world_set" => {
+                    Request::RenderWorldSet(parse_render_world_set_request(render)?)
+                }
+                _ => return Err(ProtocolError::new("expected a library render target")),
+            };
+            Ok(Request::RenderLibrary(Box::new(request)))
+        }
+        "renderer_poll" | "renderer_library" | "renderer_canvas_set" | "renderer_world_set" => {
+            Err(ProtocolError::new(format!(
+                "request type is reserved for the internal renderer control channel: {request_type}"
+            )))
+        }
         _ => Err(ProtocolError::new(format!(
             "unknown request type: {request_type}"
         ))),
@@ -1430,6 +1480,21 @@ fn parse_transition_parameter_default(
     }
 
     Ok(Some(default))
+}
+
+/// Extract a typed source rejection without interpreting human-readable error text.
+#[must_use]
+pub fn response_invalid_image(input: &str) -> Option<InvalidImage> {
+    let json = parse_json(input).ok()?;
+    let fields = json.as_object().ok()?;
+    if required_string(fields, "status").ok()? != "error" {
+        return None;
+    }
+    Some(InvalidImage {
+        path: required_string(fields, "invalid_image").ok()?.to_owned(),
+        version: required_string(fields, "image_version").ok()?.to_owned(),
+        message: required_string(fields, "message").ok()?.to_owned(),
+    })
 }
 
 /// Return an error response message, if the JSON is a protocol error response.
@@ -2477,6 +2542,37 @@ mod tests {
     use super::*;
 
     #[test]
+    fn only_private_renderer_can_receive_managed_requests() {
+        let set = parse_public_request(r#"{"type":"set","outputs":{"display":"/walls/test.png"}}"#)
+            .unwrap();
+        for request in [Request::RenderLibrary(Box::new(set)), Request::PollRenderer] {
+            let json = request.to_json();
+            assert_eq!(parse_request(&json).unwrap(), request);
+            assert!(parse_public_request(&json).is_err());
+        }
+        assert!(parse_request(r#"{"type":"renderer_library","render":{"type":"stop"}}"#).is_err());
+    }
+
+    #[test]
+    fn source_rejection_round_trips_without_parsing_the_message() {
+        let image = InvalidImage {
+            path: "a: \"odd\".png".into(),
+            version: "test-version".into(),
+            message: "bad content".into(),
+        };
+        let wire = Response::InvalidImage(image.clone()).to_json();
+        assert!(response_is_error(&wire));
+        assert_eq!(response_error_message(&wire), Some(image.message.clone()));
+        assert_eq!(response_invalid_image(&wire), Some(image));
+        assert_eq!(
+            response_invalid_image(
+                r#"{"status":"error","message":"failed to decode image a.png: Memory limit exceeded"}"#
+            ),
+            None
+        );
+    }
+
+    #[test]
     fn request_round_trip_for_set_push() {
         let request = Request::Set(SetRequest {
             outputs: BTreeMap::from([("DP-1".to_owned(), "/tmp/wall.jpg".to_owned())]),
@@ -2958,7 +3054,7 @@ mod tests {
                 "ready cache coverage"
             ]
         );
-        assert!(!world.parameters.is_empty());
+        assert_ne!(world.parameters, []);
     }
 
     #[test]

@@ -6,6 +6,10 @@ explicitly before a release.
 
 ## Unreleased
 
+- Library rotation and restore automatically move decoder-rejected wallpapers
+  into `quarantine_dir/auto/` and select replacements. Manual quarantine keeps
+  its existing location; explicit paths and renderer failures do not move files.
+
 ## 0.1.1 - 2026-08-25
 
 ### Fixed

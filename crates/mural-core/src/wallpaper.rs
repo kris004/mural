@@ -3,10 +3,12 @@ use std::env;
 use std::ffi::OsString;
 use std::fs::{self, File};
 use std::io::Write as _;
+use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use mural_ipc::{WallpaperAction, WallpaperEntry, WallpaperResponse};
+use mural_ipc::{InvalidImage, WallpaperAction, WallpaperEntry, WallpaperResponse};
+use rustix::fs::{CWD, RenameFlags, renameat_with};
 
 use crate::config::MuralConfig;
 
@@ -67,6 +69,21 @@ pub struct WallpaperPaths {
     pub wall_dir: PathBuf,
     pub state_dir: PathBuf,
     pub quarantine_dir: PathBuf,
+}
+
+/// Identify the file that was decoded without reopening or hashing its contents.
+#[must_use]
+pub fn image_version(stat: &fs::Metadata) -> String {
+    format!(
+        "{}:{}:{}:{}:{}:{}:{}",
+        stat.dev(),
+        stat.ino(),
+        stat.len(),
+        stat.mtime(),
+        stat.mtime_nsec(),
+        stat.ctime(),
+        stat.ctime_nsec()
+    )
 }
 
 pub fn configured_wallpaper_paths(config: &MuralConfig) -> Result<WallpaperPaths, String> {
@@ -554,9 +571,7 @@ impl WallpaperControl {
     ) -> Result<WallpaperResponse, String> {
         if let Some(move_plan) = &prepared.quarantine {
             let source = normalize_path(&move_plan.source);
-            self.library.retain(|wall| wall != &source);
-            self.favorites.retain(|wall| wall != &source);
-            self.shuffle_bag.retain(|wall| wall != &source);
+            self.remove_library_image(&source);
         }
         prepared.layout.write()?;
         self.layouts
@@ -568,6 +583,57 @@ impl WallpaperControl {
             entries: prepared.entries,
             favorites: Vec::new(),
         })
+    }
+
+    /// Move only the unchanged, indexed source. Never traverse a library symlink
+    /// or overwrite a previous recovery copy (including a dangling symlink).
+    pub fn quarantine_invalid_image(&mut self, image: &InvalidImage) -> Result<PathBuf, String> {
+        let source = Path::new(&image.path);
+        if !self.is_eligible_top_level_wallpaper(source) || !self.library.contains(&image.path) {
+            return Err("source is not in the active wallpaper library".to_owned());
+        }
+        let dir = self.quarantine_dir.join("auto");
+        fs::create_dir_all(&dir).map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
+        if !fs::symlink_metadata(&dir).is_ok_and(|s| s.is_dir()) {
+            return Err(format!("{} is not a quarantine directory", dir.display()));
+        }
+        let file_name = source.file_name().ok_or("source has no filename")?;
+        for suffix in 0.. {
+            let destination = quarantine_destination(&dir, file_name, suffix);
+            let stat = fs::symlink_metadata(source).map_err(|e| e.to_string())?;
+            if !stat.is_file() || image_version(&stat) != image.version {
+                return Err(
+                    "source changed or is not a regular file; leaving it in place".to_owned(),
+                );
+            }
+            match renameat_with(CWD, source, CWD, &destination, RenameFlags::NOREPLACE) {
+                Ok(()) => {
+                    self.remove_library_image(&image.path);
+                    self.persist_core_state().map_err(|e| {
+                        format!(
+                            "moved to {} but could not save rotation state: {e}",
+                            destination.display()
+                        )
+                    })?;
+                    return Ok(destination);
+                }
+                Err(rustix::io::Errno::EXIST) => {}
+                Err(e) => return Err(format!("cannot move to {}: {e}", destination.display())),
+            }
+        }
+        unreachable!("unbounded suffix search returns")
+    }
+
+    fn remove_library_image(&mut self, source: &str) {
+        self.library.retain(|wall| wall != source);
+        self.favorites.retain(|wall| wall != source);
+        self.shuffle_pos = self
+            .shuffle_bag
+            .iter()
+            .take(self.shuffle_pos)
+            .filter(|wall| *wall != source)
+            .count();
+        self.shuffle_bag.retain(|wall| wall != source);
     }
 
     fn load_persistent_lists(&mut self) {
@@ -1182,27 +1248,27 @@ fn normalize_path(path: &Path) -> String {
 }
 
 fn unique_destination(dir: &Path, file_name: &std::ffi::OsStr) -> PathBuf {
-    let initial = dir.join(file_name);
-    if !initial.exists() {
-        return initial;
-    }
-    let source = Path::new(file_name);
-    let stem = source
-        .file_stem()
-        .and_then(|value| value.to_str())
-        .unwrap_or("wallpaper");
-    let extension = source.extension().and_then(|value| value.to_str());
-    for suffix in 1.. {
-        let name = match extension {
-            Some(extension) => format!("{stem}.{suffix}.{extension}"),
-            None => format!("{stem}.{suffix}"),
-        };
-        let candidate = dir.join(name);
-        if !candidate.exists() {
-            return candidate;
+    for n in 0.. {
+        let path = quarantine_destination(dir, file_name, n);
+        if !path.exists() {
+            return path;
         }
     }
     unreachable!("unbounded suffix search returns")
+}
+
+fn quarantine_destination(dir: &Path, file_name: &std::ffi::OsStr, suffix: u64) -> PathBuf {
+    if suffix == 0 {
+        return dir.join(file_name);
+    }
+    let source = Path::new(file_name);
+    let mut name = source.file_stem().unwrap_or(file_name).to_os_string();
+    name.push(format!(".{suffix}"));
+    if let Some(ext) = source.extension() {
+        name.push(".");
+        name.push(ext);
+    }
+    dir.join(name)
 }
 
 fn home_dir() -> Result<PathBuf, String> {
@@ -1413,6 +1479,126 @@ mod tests {
         }
     }
 
+    fn rejection(path: &Path) -> InvalidImage {
+        InvalidImage {
+            path: normalize_path(path),
+            version: image_version(&fs::metadata(path).unwrap()),
+            message: "rejected by decoder".into(),
+        }
+    }
+
+    #[test]
+    fn auto_quarantine_preserves_collisions_and_the_next_bag_entry() {
+        let root = temp_state("auto-quarantine");
+        let mut control = test_control(&root);
+        let bad = control.wall_dir.join("b.png");
+        let image = rejection(&bad);
+        let good = normalize_path(&control.wall_dir.join("a.jpg"));
+        control.shuffle_bag = vec![
+            image.path.clone(),
+            good.clone(),
+            image.path.clone(),
+            good.clone(),
+        ];
+        control.shuffle_pos = 2;
+        control.favorites.push(image.path.clone());
+        let dir = control.quarantine_dir.join("auto");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(
+            control.quarantine_dir.join("b.png"),
+            b"manually quarantined",
+        )
+        .unwrap();
+        fs::write(dir.join("b.png"), b"previous rejection").unwrap();
+        std::os::unix::fs::symlink("missing", dir.join("b.1.png")).unwrap();
+        let moved = control.quarantine_invalid_image(&image).unwrap();
+        assert_eq!(moved, dir.join("b.2.png"));
+        assert_eq!(fs::read(moved).unwrap(), b"not actually decoded");
+        assert_eq!(fs::read(dir.join("b.png")).unwrap(), b"previous rejection");
+        assert!(dir.join("b.1.png").is_symlink());
+        assert_eq!(
+            fs::read(control.quarantine_dir.join("b.png")).unwrap(),
+            b"manually quarantined"
+        );
+        assert!(!bad.exists());
+        control.load_persistent_lists();
+        assert!(!control.library.contains(&image.path));
+        assert!(!control.favorites.contains(&image.path));
+        assert_eq!(control.shuffle_bag, vec![good.clone(), good]);
+        assert_eq!(control.shuffle_pos, 1);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn auto_quarantine_refuses_changed_unmanaged_and_linked_sources() {
+        let root = temp_state("auto-quarantine-guards");
+        let mut control = test_control(&root);
+        let bad = control.wall_dir.join("b.png");
+        let old = rejection(&bad);
+        fs::write(&bad, b"repaired download").unwrap();
+        assert!(control.quarantine_invalid_image(&old).is_err());
+        let outside = root.join("external.png");
+        fs::write(&outside, b"outside").unwrap();
+        assert!(
+            control
+                .quarantine_invalid_image(&rejection(&outside))
+                .is_err()
+        );
+        fs::remove_file(&bad).unwrap();
+        std::os::unix::fs::symlink(&outside, &bad).unwrap();
+        assert!(control.quarantine_invalid_image(&rejection(&bad)).is_err());
+        assert!(bad.is_symlink());
+        assert_eq!(fs::read(outside).unwrap(), b"outside");
+        assert!(control.library.contains(&old.path));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn retry_after_quarantine_heals_persisted_history_without_an_extra_step() {
+        let root = temp_state("auto-quarantine-history");
+        let mut control = test_control(&root);
+        let outputs = &outputs()[..1];
+        let a = normalize_path(&control.wall_dir.join("a.jpg"));
+        let b = normalize_path(&control.wall_dir.join("b.png"));
+        let c = normalize_path(&control.wall_dir.join("c.webp"));
+        control.shuffle_bag = vec![a.clone(), b.clone(), c.clone()];
+        let startup = control.prepare_startup_display(outputs).unwrap();
+        control.commit_wallpaper_change(startup).unwrap();
+        for action in [WallpaperAction::Next, WallpaperAction::Back] {
+            let change = control
+                .prepare_wallpaper_change(&action, outputs, false)
+                .unwrap();
+            control.commit_wallpaper_change(change).unwrap();
+        }
+        let rejected = control
+            .prepare_wallpaper_change(&WallpaperAction::Next, outputs, false)
+            .unwrap();
+        assert_eq!(rejected.selection, std::slice::from_ref(&b));
+        control.rollback_wallpaper_change(rejected);
+        control
+            .quarantine_invalid_image(&rejection(Path::new(&b)))
+            .unwrap();
+        assert_eq!(
+            control.current_response(outputs).unwrap().entries[0].path,
+            a
+        );
+        let retry = control
+            .prepare_wallpaper_change(&WallpaperAction::Next, outputs, false)
+            .unwrap();
+        assert_eq!(retry.selection, std::slice::from_ref(&c));
+        control.commit_wallpaper_change(retry).unwrap();
+        control.layouts.clear();
+        assert_eq!(
+            control.current_response(outputs).unwrap().entries[0].path,
+            c
+        );
+        let back = control
+            .prepare_wallpaper_change(&WallpaperAction::Back, outputs, false)
+            .unwrap();
+        assert_eq!(back.selection, [a]);
+        fs::remove_dir_all(root).unwrap();
+    }
+
     #[test]
     fn indexes_only_top_level_supported_images() {
         let root = temp_state("top-level");
@@ -1527,7 +1713,7 @@ mod tests {
             control.upcoming_shuffle_paths(2),
             paths(&["bag-b", "bag-c"])
         );
-        assert!(control.upcoming_shuffle_paths(0).is_empty());
+        assert_eq!(control.upcoming_shuffle_paths(0), paths(&[]));
     }
 
     #[test]
