@@ -674,7 +674,7 @@ mod tests {
     fn invalid_route_indices_return_no_tiles() {
         let layout = WorldLayout::new(10, 4);
 
-        assert!(world_tiles_for_route(layout, 0, 10, 8, 1.0).is_empty());
+        assert_eq!(world_tiles_for_route(layout, 0, 10, 8, 1.0), []);
     }
 
     #[test]

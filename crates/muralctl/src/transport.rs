@@ -108,7 +108,7 @@ mod tests {
             stream
                 .read_to_string(&mut request)
                 .expect("read client request");
-            assert!(!request.is_empty());
+            assert_ne!(request, "");
             let _ = release_rx.recv_timeout(Duration::from_secs(2));
         });
 

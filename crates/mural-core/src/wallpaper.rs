@@ -1713,7 +1713,7 @@ mod tests {
             control.upcoming_shuffle_paths(2),
             paths(&["bag-b", "bag-c"])
         );
-        assert!(control.upcoming_shuffle_paths(0).is_empty());
+        assert_eq!(control.upcoming_shuffle_paths(0), paths(&[]));
     }
 
     #[test]

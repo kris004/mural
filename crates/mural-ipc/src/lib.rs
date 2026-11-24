@@ -3054,7 +3054,7 @@ mod tests {
                 "ready cache coverage"
             ]
         );
-        assert!(!world.parameters.is_empty());
+        assert_ne!(world.parameters, []);
     }
 
     #[test]

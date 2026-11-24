@@ -1831,7 +1831,7 @@ mod tests {
             &[active("DP-1"), active("DP-2")],
         );
         assert_eq!(response.action, "next");
-        assert!(response.entries.is_empty());
+        assert_eq!(response.entries, []);
         assert!(response.message.contains("all target outputs are off"));
         assert!(response.message.contains("DP-1, DP-2"));
     }
