@@ -75,20 +75,14 @@ impl MuralApp {
                 );
                 let capture_canvas_positions =
                     matches!(transition, mural_ipc::Transition::Canvas { .. });
-                let prepared = match self.wallpaper.prepare_wallpaper_change(
-                    &request.action,
-                    &outputs,
-                    capture_canvas_positions,
-                ) {
-                    Ok(prepared) => prepared,
-                    Err(message) => return Response::Error { message },
-                };
-                trace_log!(
-                    self.trace,
-                    "wallpaper request {action_name}: prepared {} entries",
-                    prepared.entries.len()
-                );
-                self.apply_prepared_wallpaper_change(prepared, transition, scale_mode)
+                crate::quarantine::retry(|| {
+                    let prepared = self.wallpaper.prepare_wallpaper_change(
+                        &request.action,
+                        &outputs,
+                        capture_canvas_positions,
+                    )?;
+                    self.apply_prepared_wallpaper_change(prepared, transition, scale_mode)
+                })
             }
         };
 
@@ -103,6 +97,33 @@ impl MuralApp {
                     "wallpaper request {action_name}: complete error: {message}"
                 );
                 Response::Error { message }
+            }
+        }
+    }
+
+    fn restore_managed_layout(
+        &mut self,
+        outputs: &[ActiveOutput],
+    ) -> Result<mural_ipc::WallpaperResponse, String> {
+        crate::quarantine::retry(|| {
+            let prepared = self.wallpaper.prepare_startup_display(outputs)?;
+            self.apply_prepared_wallpaper_change(
+                prepared,
+                self.config.startup_transition(),
+                self.config.scale_mode,
+            )
+        })
+    }
+
+    pub(crate) fn handle_standalone_rejection(&mut self) {
+        if !self.mode.is_renderer_child()
+            && let Some(image) = self.rejected_images.pop_front()
+        {
+            let outputs = self.wallpaper_outputs();
+            if crate::quarantine::recover_deferred(&mut self.wallpaper, &outputs, &image)
+                && let Err(message) = self.restore_managed_layout(&outputs)
+            {
+                eprintln!("murald: could not replace rejected target: {message}");
             }
         }
     }
@@ -126,19 +147,7 @@ impl MuralApp {
         }
 
         let outputs = self.wallpaper_outputs();
-        let prepared = match self.wallpaper.prepare_startup_display(&outputs) {
-            Ok(prepared) => prepared,
-            Err(message) => {
-                eprintln!("murald: startup wallpaper display skipped: {message}");
-                self.flags.mark_startup_done();
-                return;
-            }
-        };
-        match self.apply_prepared_wallpaper_change(
-            prepared,
-            self.config.startup_transition(),
-            self.config.scale_mode,
-        ) {
+        match self.restore_managed_layout(&outputs) {
             Ok(response) => {
                 self.flags.mark_startup_done();
                 eprintln!(
@@ -198,18 +207,7 @@ impl MuralApp {
             .filter(|surface| surface.restore_pending)
             .count();
         let outputs = self.wallpaper_outputs();
-        let prepared = match self.wallpaper.prepare_startup_display(&outputs) {
-            Ok(prepared) => prepared,
-            Err(message) => {
-                eprintln!("murald: pending wallpaper restore skipped: {message}");
-                return;
-            }
-        };
-        match self.apply_prepared_wallpaper_change(
-            prepared,
-            self.config.startup_transition(),
-            self.config.scale_mode,
-        ) {
+        match self.restore_managed_layout(&outputs) {
             Ok(response) => {
                 eprintln!(
                     "murald: restored {pending} pending wallpaper surface(s); displayed {} wallpaper(s)",

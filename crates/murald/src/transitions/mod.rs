@@ -41,6 +41,7 @@ pub(crate) struct ActiveTransition {
 }
 
 pub(crate) struct QueuedWallpaper {
+    pub(crate) library_target: bool,
     pub(crate) id: u64,
     pub(crate) image_path: String,
     pub(crate) scale_mode: ScaleMode,

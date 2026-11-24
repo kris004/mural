@@ -297,6 +297,19 @@ impl MuralApp {
                 }),
                 false,
             ),
+            Request::RenderLibrary(render) => {
+                self.library_render = true;
+                let response = self.handle_request(*render);
+                self.library_render = false;
+                response
+            }
+            Request::PollRenderer => (
+                self.rejected_images.pop_front().map_or_else(
+                    || Response::Health(Box::new(self.renderer_health_response())),
+                    Response::InvalidImage,
+                ),
+                false,
+            ),
             Request::Set(request) => (self.set_wallpapers(&request), false),
             Request::Preload(request) => (self.handle_preload_request(&request), false),
             Request::Clear(request) => (self.clear(request), false),
@@ -342,6 +355,8 @@ fn request_trace_name(request: &Request) -> &'static str {
         Request::Cache(_) => "cache",
         Request::RenderCanvasSet(_) => "renderer_canvas_set",
         Request::RenderWorldSet(_) => "renderer_world_set",
+        Request::RenderLibrary(_) => "renderer_library",
+        Request::PollRenderer => "renderer_poll",
         Request::Stop => "stop",
     }
 }
@@ -355,7 +370,7 @@ fn response_trace_name(response: &Response) -> &'static str {
         Response::Query(_) => "query",
         Response::Wallpaper(_) => "wallpaper",
         Response::Cache(_) => "cache",
-        Response::Error { .. } => "error",
+        Response::Error { .. } | Response::InvalidImage(_) => "error",
     }
 }
 

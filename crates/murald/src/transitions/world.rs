@@ -199,8 +199,7 @@ impl MuralApp {
         let route = world_route_for_target(request, &target.name)?;
 
         trace_log!(self.trace, "set_world_wallpapers: decode {surface_name}");
-        let image = image_loader::load(&target.image_path)
-            .map_err(|message| Response::Error { message })?;
+        let image = image_loader::load(&target.image_path).map_err(Response::from)?;
         trace_log!(self.trace, "set_world_wallpapers: decoded {surface_name}");
 
         let texture = self.surfaces[surface_index]
@@ -304,7 +303,9 @@ impl MuralApp {
                 Ok(decoded) => decoded,
                 Err(message) => {
                     cleanup_world_tiles(&self.egl, tiles);
-                    return Err(Response::Error { message });
+                    return Err(Response::Error {
+                        message: message.into(),
+                    });
                 }
             };
             match self.surfaces[surface_index].upload_wallpaper_texture(&self.egl, &decoded) {
@@ -371,6 +372,7 @@ impl MuralApp {
             let id = self.next_decode_id();
             self.surfaces[upload.surface_index].enqueue_wallpaper_transition(
                 QueuedWallpaper {
+                    library_target: self.library_render,
                     id,
                     image_path: upload.image_path,
                     scale_mode,

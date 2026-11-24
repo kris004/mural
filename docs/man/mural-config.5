@@ -126,6 +126,10 @@ or
 .BI quarantine_dir " = PATH"
 Directory used by
 .BR "muralctl quarantine" .
+The daemon places automatically rejected library images in its
+.I auto/
+subdirectory, not alongside manually quarantined files. Automatic moves preserve
+existing names by adding a numeric suffix and require the same filesystem.
 Environment override:
 .BR MURAL_QUARANTINE_DIR ,
 then legacy

@@ -54,6 +54,7 @@ mod library_watcher;
 mod output_power;
 mod outputs;
 mod preload;
+mod quarantine;
 mod render_control;
 mod supervisor;
 mod surface;
@@ -158,6 +159,8 @@ fn run_renderer(
     };
 
     let mut app = MuralApp {
+        library_render: false,
+        rejected_images: std::collections::VecDeque::new(),
         mode,
         registry_state: RegistryState::new(&globals),
         output_state: OutputState::new(&globals, &qh),
@@ -251,6 +254,7 @@ fn run_renderer(
         }
 
         let qh = app.qh.clone();
+        app.handle_standalone_rejection();
         app.maybe_startup_display();
         app.maybe_restore_pending_wallpapers();
         app.render_pending_surfaces(&qh);

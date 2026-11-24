@@ -1,6 +1,7 @@
 # Mural's wallpaper library is intentionally scanned only at this directory's
 # top level. Paths beginning with ~ are expanded against HOME.
 wall_dir = ~/Pictures/wallpapers
+# Manual picks go here; automatically rejected images go in its auto/ subdirectory.
 # quarantine_dir = ~/Pictures/wallpapers/.quarantine
 # state_dir = ~/.local/state/mural
 

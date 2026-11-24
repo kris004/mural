@@ -18,7 +18,7 @@ impl MuralApp {
                     trace_log!(self.trace, "set_wallpapers cut: decoded {}", target.name);
                     decoded.push((target, image));
                 }
-                Err(message) => return Response::Error { message },
+                Err(error) => return error.into(),
             }
         }
 

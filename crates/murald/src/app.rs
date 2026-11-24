@@ -116,6 +116,8 @@ impl AppMode {
 }
 
 pub(crate) struct MuralApp {
+    pub(crate) library_render: bool,
+    pub(crate) rejected_images: std::collections::VecDeque<mural_ipc::InvalidImage>,
     pub(crate) mode: AppMode,
     pub(crate) registry_state: RegistryState,
     pub(crate) output_state: OutputState,

@@ -174,6 +174,13 @@ muralctl shift back
 muralctl current
 ```
 
+If the decoder rejects a library wallpaper (including one larger than its decode
+budget), Mural keeps the file in `quarantine_dir/auto/` and tries a replacement.
+`muralctl quarantine INDEX` still puts your own picks directly in `quarantine_dir`
+(default: `.quarantine` inside the wallpaper directory). To restore a file, repair
+or resize it, move it back into the wallpaper directory, and run `muralctl rescan`.
+Explicit `set` commands do not move files.
+
 Set explicit paths on a named output:
 
 ```sh

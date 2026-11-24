@@ -30,6 +30,19 @@ impl MuralApp {
     }
 
     pub(crate) fn handle_decode_result(&mut self, result: DecodeResult) {
+        if result.library_target
+            && let Err(crate::decode::ImageLoadError::Invalid(image)) = &result.result
+            && !self.rejected_images.contains(image)
+        {
+            if self.rejected_images.len() < 32 {
+                self.rejected_images.push_back(image.clone());
+            } else {
+                eprintln!(
+                    "murald: deferred quarantine queue is full; leaving {} in place",
+                    image.path
+                );
+            }
+        }
         if let Some(index) = self
             .surfaces
             .iter()
